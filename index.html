@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：音響強化版</title>
+    <title>野獣クリッカー：サウンドテスト版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -69,12 +69,17 @@
             to { transform: scale(1.1); }
         }
 
-        /* 音量ボタン */
-        #mute-btn {
+        /* ボタン群 */
+        .controls {
             position: absolute;
             top: 10px;
             right: 10px;
             z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
             background: #555;
             color: #fff;
             border: 1px solid #777;
@@ -83,6 +88,9 @@
             border-radius: 5px;
             font-size: 0.8em;
         }
+        .btn:hover { background: #666; }
+
+        #test-btn { background: #b00; border-color: #f00; }
 
         /* 次のボーナスまでのタイマー */
         #next-bonus-display {
@@ -192,36 +200,23 @@
         .item-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
 
         /* エフェクトCSS */
-        .pop-yaju {
-            position: absolute; pointer-events: none; animation: popMove 1s ease-out forwards;
-            border-radius: 50%; z-index: 100;
-        }
-        @keyframes popMove {
-            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); }
-            100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5) rotate(360deg); }
-        }
-        .falling-yaju {
-            position: absolute; top: -100px; pointer-events: none; animation: fall linear forwards;
-            opacity: 0.6; z-index: 1;
-        }
-        @keyframes fall {
-            0% { transform: translateY(0) rotate(0deg); }
-            100% { transform: translateY(110vh) rotate(360deg); }
-        }
-        .floating-number {
-            position: absolute; color: #fff; font-weight: bold; font-size: 2em; pointer-events: none;
-            animation: floatText 0.8s ease-out forwards; text-shadow: 2px 2px 0 #000; z-index: 101;
-        }
-        @keyframes floatText {
-            0% { opacity: 1; transform: translateY(0) scale(1); }
-            100% { opacity: 0; transform: translateY(-80px) scale(1.5); }
-        }
+        .pop-yaju { position: absolute; pointer-events: none; animation: popMove 1s ease-out forwards; border-radius: 50%; z-index: 100; }
+        @keyframes popMove { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); } 100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5) rotate(360deg); } }
+        .falling-yaju { position: absolute; top: -100px; pointer-events: none; animation: fall linear forwards; opacity: 0.6; z-index: 1; }
+        @keyframes fall { 0% { transform: translateY(0) rotate(0deg); } 100% { transform: translateY(110vh) rotate(360deg); } }
+        .floating-number { position: absolute; color: #fff; font-weight: bold; font-size: 2em; pointer-events: none; animation: floatText 0.8s ease-out forwards; text-shadow: 2px 2px 0 #000; z-index: 101; }
+        @keyframes floatText { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
     </style>
 </head>
 <body>
 
-    <audio id="bgm" src="bgm.mp3" loop></audio>
-    <audio id="bonus-bgm" src="bonus_bgm.mp3" loop></audio> <button id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
+    <audio id="bgm" src="bgm.mp3" loop onerror="alert('bgm.mp3 が見つかりません！ファイル名を確認してください。')"></audio>
+    <audio id="bonus-bgm" src="bonus_bgm.mp3" loop onerror="alert('bonus_bgm.mp3 が見つかりません！ファイル名を確認してください。')"></audio>
+    
+    <div class="controls">
+        <button class="btn" id="test-btn" onclick="forceBonus()">🔥 FEVERテスト</button>
+        <button class="btn" id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
+    </div>
 
     <div id="next-bonus-display">
         ボーナスタイムまで: <span id="next-bonus-time" style="font-weight:bold; color:#ffcc00;">60</span> 秒
@@ -245,7 +240,7 @@
             <div class="click-area" onclick="clickYaju(event)">
                 <img src="野獣.png" alt="野獣先輩">
             </div>
-            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックでスタート</div>
+            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックで音声を有効化</div>
         </div>
 
         <div class="shop-section">
@@ -259,25 +254,21 @@
         let isMuted = false;
         let bgmStarted = false;
 
-        // ===================================
-        // ▼ 設定エリア ▼
-        // ===================================
-        const BGM_VOLUME = 0.2;  // BGM音量 (0.2)
-        const SE_VOLUME = 0.3;   // 効果音音量 (0.3)
+        // 設定エリア
+        const BGM_VOLUME = 0.2;
+        const SE_VOLUME = 0.3;
         
-        const BONUS_INTERVAL = 60; // ボーナス発生間隔 (秒)
-        const BONUS_DURATION = 10; // ボーナス持続時間 (秒)
-        // ===================================
+        const BONUS_INTERVAL = 60;
+        const BONUS_DURATION = 10;
 
-        // 音声要素の取得
+        // 音声要素
         const bgm = document.getElementById('bgm');
         const bonusBgm = document.getElementById('bonus-bgm');
         bgm.volume = BGM_VOLUME;
-        bonusBgm.volume = BGM_VOLUME; // ボーナスBGMも同じ音量
+        bonusBgm.volume = BGM_VOLUME;
 
-        // 効果音ファイルパス
         const tapSoundUrl = "tap.mp3";
-        const buySoundUrl = "buy.mp3"; // 追加: 購入音
+        const buySoundUrl = "buy.mp3";
 
         let bonusTimer = 0;
         let nextBonusTimer = BONUS_INTERVAL;
@@ -316,70 +307,69 @@
 
         function updateDisplay() {
             document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
-            
             let currentSps = isBonusActive ? gameData.autoIncome * 5 : gameData.autoIncome;
             let spsEl = document.getElementById('sps');
             spsEl.innerText = currentSps.toLocaleString();
             spsEl.style.color = isBonusActive ? '#ff0000' : '#fff';
-            
-            // カウントダウン表示更新
             document.getElementById('next-bonus-time').innerText = nextBonusTimer;
 
             items.forEach((item, index) => {
                 const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
                 document.getElementById(`cost-${index}`).innerText = cost.toLocaleString();
                 document.getElementById(`count-${index}`).innerText = item.count;
-                
                 const el = document.getElementById(`item-${index}`);
                 if (gameData.score >= cost) el.classList.remove('disabled');
                 else el.classList.add('disabled');
             });
         }
 
-        // 汎用SE再生関数
         function playSound(url) {
             if (isMuted) return;
             let sound = new Audio(url);
             sound.volume = SE_VOLUME;
-            sound.play().catch(e => {});
+            sound.play().catch(e => console.log(e));
         }
 
         function toggleMute() {
             isMuted = !isMuted;
             const btn = document.getElementById('mute-btn');
-            
             if (isMuted) {
-                // ミュート時
                 bgm.pause();
                 bonusBgm.pause();
                 btn.innerText = "🔇 音量OFF";
                 btn.style.background = "#800";
             } else {
-                // ミュート解除時
-                // 現在の状態に合わせて再生するBGMを選ぶ
-                if (isBonusActive) {
-                    bonusBgm.play().catch(()=>{});
-                } else if (bgmStarted) {
-                    bgm.play().catch(()=>{});
-                }
+                if (isBonusActive) bonusBgm.play().catch(()=>{});
+                else if (bgmStarted) bgm.play().catch(()=>{});
                 btn.innerText = "🔊 音量ON";
                 btn.style.background = "#555";
             }
         }
 
-        // --- ボーナス管理 ---
+        function forceBonus() {
+            // テスト用：クリックしていなくても強制再生を試みる
+            if(!bgmStarted) {
+                alert("まずは野獣先輩をクリックして、BGMを開始してください！");
+                return;
+            }
+            startBonus();
+        }
+
         function startBonus() {
             isBonusActive = true;
             bonusTimer = BONUS_DURATION;
             
-            // BGM切り替え
+            // 切り替え処理
             if (!isMuted && bgmStarted) {
                 bgm.pause();
                 bonusBgm.currentTime = 0;
-                bonusBgm.play().catch(()=>{});
+                // エラーが出たらアラートを出すようにPromise処理
+                bonusBgm.play().catch(e => {
+                    console.log(e);
+                    alert("ボーナスBGMの再生に失敗しました。ファイル名を確認してください。");
+                });
             }
             
-            // 演出ON
             document.body.classList.add('bonus-mode');
             document.getElementById('bonus-banner').style.display = 'block';
             updateDisplay();
@@ -389,13 +379,11 @@
             isBonusActive = false;
             nextBonusTimer = BONUS_INTERVAL;
             
-            // BGM戻す
             if (!isMuted && bgmStarted) {
                 bonusBgm.pause();
                 bgm.play().catch(()=>{});
             }
             
-            // 演出OFF
             document.body.classList.remove('bonus-mode');
             document.getElementById('bonus-banner').style.display = 'none';
             updateDisplay();
@@ -413,19 +401,15 @@
             updateDisplay();
         }, 1000);
 
-        // --- ゲームアクション ---
         function clickYaju(event) {
             if (!bgmStarted) {
                 bgmStarted = true;
                 if (!isMuted) bgm.play().catch(e => {});
             }
             
-            // タップ音
             playSound(tapSoundUrl);
-
             let power = gameData.clickPower;
             if (isBonusActive) power *= 5;
-
             gameData.score += power;
             spawnFloatingText(event.clientX, event.clientY, "+" + power, isBonusActive);
             spawnPopYaju(event.clientX, event.clientY);
@@ -435,21 +419,16 @@
         function buyItem(index) {
             const item = items[index];
             const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
-            
             if (gameData.score >= cost) {
                 gameData.score -= cost;
                 item.count++;
-
-                // 購入音
                 playSound(buySoundUrl);
-
                 if (item.type === 'click') gameData.clickPower += item.power;
                 else gameData.autoIncome += item.power;
                 updateDisplay();
             }
         }
 
-        // エフェクト群
         function spawnFloatingText(x, y, text, isCritical) {
             const el = document.createElement('div');
             el.className = 'floating-number';
@@ -496,15 +475,12 @@
             setTimeout(() => img.remove(), duration * 1000);
         }
 
-        // オートループ
         setInterval(() => {
             if (gameData.autoIncome > 0) {
                 let income = gameData.autoIncome;
                 if (isBonusActive) income *= 5;
-
                 gameData.score += income / 10;
                 updateDisplay();
-                
                 let chance = Math.min(gameData.autoIncome / 500, 0.5);
                 if (isBonusActive) chance += 0.3;
                 if (Math.random() < chance + 0.05) spawnFallingYaju();
