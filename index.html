@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：サウンドテスト版</title>
+    <title>野獣クリッカー：完成版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -69,17 +69,12 @@
             to { transform: scale(1.1); }
         }
 
-        /* ボタン群 */
-        .controls {
+        /* 音量ボタン */
+        #mute-btn {
             position: absolute;
             top: 10px;
             right: 10px;
             z-index: 1000;
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn {
             background: #555;
             color: #fff;
             border: 1px solid #777;
@@ -88,9 +83,7 @@
             border-radius: 5px;
             font-size: 0.8em;
         }
-        .btn:hover { background: #666; }
-
-        #test-btn { background: #b00; border-color: #f00; }
+        #mute-btn:hover { background: #666; }
 
         /* 次のボーナスまでのタイマー */
         #next-bonus-display {
@@ -210,13 +203,10 @@
 </head>
 <body>
 
-    <audio id="bgm" src="bgm.mp3" loop onerror="alert('bgm.mp3 が見つかりません！ファイル名を確認してください。')"></audio>
-    <audio id="bonus-bgm" src="bonus_bgm.mp3" loop onerror="alert('bonus_bgm.mp3 が見つかりません！ファイル名を確認してください。')"></audio>
+    <audio id="bgm" src="bgm.mp3" loop></audio>
+    <audio id="bonus-bgm" src="bonus_bgm.mp3" loop></audio>
     
-    <div class="controls">
-        <button class="btn" id="test-btn" onclick="forceBonus()">🔥 FEVERテスト</button>
-        <button class="btn" id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
-    </div>
+    <button id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
 
     <div id="next-bonus-display">
         ボーナスタイムまで: <span id="next-bonus-time" style="font-weight:bold; color:#ffcc00;">60</span> 秒
@@ -240,7 +230,7 @@
             <div class="click-area" onclick="clickYaju(event)">
                 <img src="野獣.png" alt="野獣先輩">
             </div>
-            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックで音声を有効化</div>
+            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックでBGMスタート</div>
         </div>
 
         <div class="shop-section">
@@ -327,7 +317,7 @@
             if (isMuted) return;
             let sound = new Audio(url);
             sound.volume = SE_VOLUME;
-            sound.play().catch(e => console.log(e));
+            sound.play().catch(e => {});
         }
 
         function toggleMute() {
@@ -346,15 +336,6 @@
             }
         }
 
-        function forceBonus() {
-            // テスト用：クリックしていなくても強制再生を試みる
-            if(!bgmStarted) {
-                alert("まずは野獣先輩をクリックして、BGMを開始してください！");
-                return;
-            }
-            startBonus();
-        }
-
         function startBonus() {
             isBonusActive = true;
             bonusTimer = BONUS_DURATION;
@@ -363,11 +344,7 @@
             if (!isMuted && bgmStarted) {
                 bgm.pause();
                 bonusBgm.currentTime = 0;
-                // エラーが出たらアラートを出すようにPromise処理
-                bonusBgm.play().catch(e => {
-                    console.log(e);
-                    alert("ボーナスBGMの再生に失敗しました。ファイル名を確認してください。");
-                });
+                bonusBgm.play().catch(e => {});
             }
             
             document.body.classList.add('bonus-mode');
