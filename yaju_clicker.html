@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>野獣クリッカー：カオス増量版</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #222;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            overflow: hidden; /* スクロール禁止 */
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        /* 背景エフェクト用のレイヤー */
+        #effect-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* クリックを邪魔しない */
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        /* ゲームUIレイヤー */
+        .game-ui {
+            position: relative;
+            z-index: 10; /* 背景より手前に表示 */
+            display: flex;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            gap: 20px;
+        }
+
+        /* スマホ対応 */
+        @media (max-width: 768px) {
+            .game-ui { flex-direction: column; overflow-y: auto; }
+            .shop-section { width: 100% !important; height: 50% !important; }
+            .click-section { height: 40% !important; }
+        }
+
+        /* 左側：クリッカーエリア */
+        .click-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #score-container {
+            font-size: 3em;
+            font-weight: bold;
+            text-shadow: 0 0 10px #000, 2px 2px 0px #ffcc00;
+        }
+        #sps-display { font-size: 0.6em; color: #ddd; margin-top: 5px; text-shadow: 1px 1px 2px #000; }
+
+        .click-area {
+            margin-top: 20px;
+            width: 250px;
+            height: 250px;
+            cursor: pointer;
+            transition: transform 0.05s;
+            border-radius: 50%;
+            border: 8px solid #ffcc00;
+            box-shadow: 0 0 50px rgba(255, 204, 0, 0.4);
+            background-color: #fff;
+            position: relative;
+            z-index: 20;
+        }
+
+        .click-area img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .click-area:active { transform: scale(0.90); }
+
+        /* 右側：ショップエリア */
+        .shop-section {
+            flex: 1;
+            background: rgba(51, 51, 51, 0.9); /* 少し透けさせる */
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid #555;
+            max-width: 450px;
+            backdrop-filter: blur(5px);
+        }
+
+        .shop-header {
+            border-bottom: 2px solid #555;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .item-list {
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 5px;
+        }
+        
+        .item-list::-webkit-scrollbar { width: 8px; }
+        .item-list::-webkit-scrollbar-thumb { background: #666; border-radius: 4px; }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(68, 68, 68, 0.8);
+            margin-bottom: 8px;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #555;
+        }
+        .item:hover { background: rgba(80, 80, 80, 0.9); transform: scale(1.02); }
+        .item.disabled { opacity: 0.5; pointer-events: none; background: #222; }
+
+        .item-name { font-weight: bold; color: #fff; font-size: 0.9em; }
+        .item-cost { color: #ffcc00; font-weight: bold; font-size: 0.9em; }
+        .item-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
+
+        /* --- エフェクト用CSS --- */
+
+        /* タップ時に飛び散る野獣 */
+        .pop-yaju {
+            position: absolute;
+            pointer-events: none;
+            animation: popMove 1s ease-out forwards;
+            border-radius: 50%;
+            z-index: 100;
+        }
+
+        @keyframes popMove {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); }
+            100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5) rotate(360deg); }
+        }
+
+        /* 背景に降る野獣 */
+        .falling-yaju {
+            position: absolute;
+            top: -100px;
+            pointer-events: none;
+            animation: fall linear forwards;
+            opacity: 0.6;
+            z-index: 1;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(110vh) rotate(360deg); }
+        }
+
+        /* 数字のポップ */
+        .floating-number {
+            position: absolute;
+            color: #fff;
+            font-weight: bold;
+            font-size: 2em;
+            pointer-events: none;
+            animation: floatText 0.8s ease-out forwards;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 101;
+        }
+
+        @keyframes floatText {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-80px) scale(1.5); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="effect-layer"></div>
+
+    <div class="game-ui">
+        <div class="click-section">
+            <h1 style="color:#ffcc00; margin:0; text-shadow: 2px 2px #000;">野獣クリッカー</h1>
+            <div id="score-container">
+                <span id="score">0</span> YJ
+                <div id="sps-display">秒間: <span id="sps">0</span> YJ</div>
+            </div>
+            
+            <div class="click-area" onclick="clickYaju(event)">
+                <img src="野獣.png" alt="野獣先輩">
+            </div>
+        </div>
+
+        <div class="shop-section">
+            <div class="shop-header">アップグレード</div>
+            <div class="item-list" id="shop-items"></div>
+        </div>
+    </div>
+
+    <script>
+        let gameData = { score: 0, clickPower: 1, autoIncome: 0 };
+
+        // アイテムリスト
+        const items = [
+            { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
+            { name: "柔らかい枕", type: "auto", baseCost: 50, power: 1, count: 0 },
+            { name: "王道を往く", type: "click", baseCost: 150, power: 3, count: 0 },
+            { name: "アイスティー", type: "auto", baseCost: 500, power: 5, count: 0 },
+            { name: "ヌッ！", type: "click", baseCost: 1200, power: 10, count: 0 },
+            { name: "日焼けサロン", type: "auto", baseCost: 3000, power: 25, count: 0 },
+            { name: "屋上", type: "auto", baseCost: 10000, power: 80, count: 0 },
+            { name: "イキスギイクイク", type: "click", baseCost: 50000, power: 100, count: 0 },
+            { name: "黒塗りの高級車", type: "auto", baseCost: 114514, power: 810, count: 0 },
+            { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 }
+        ];
+
+        // 初期化
+        function initShop() {
+            const container = document.getElementById('shop-items');
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.id = `item-${index}`;
+                div.onclick = () => buyItem(index);
+                div.innerHTML = `
+                    <div>
+                        <div class="item-name">${item.name} (+${item.power})</div>
+                        <div class="item-cost"><span id="cost-${index}">${item.baseCost}</span> YJ</div>
+                    </div>
+                    <div class="item-count" id="count-${index}">0</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 表示更新
+        function updateDisplay() {
+            document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
+            document.getElementById('sps').innerText = gameData.autoIncome.toLocaleString();
+
+            items.forEach((item, index) => {
+                const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
+                document.getElementById(`cost-${index}`).innerText = cost.toLocaleString();
+                document.getElementById(`count-${index}`).innerText = item.count;
+                
+                const el = document.getElementById(`item-${index}`);
+                if (gameData.score >= cost) el.classList.remove('disabled');
+                else el.classList.add('disabled');
+            });
+        }
+
+        // --- タップ処理（エフェクト追加） ---
+        function clickYaju(event) {
+            gameData.score += gameData.clickPower;
+            
+            // 1. 数字が飛び出る
+            spawnFloatingText(event.clientX, event.clientY, "+" + gameData.clickPower);
+
+            // 2. 野獣が飛び散る
+            spawnPopYaju(event.clientX, event.clientY);
+
+            updateDisplay();
+        }
+
+        // 数字生成関数
+        function spawnFloatingText(x, y, text) {
+            const el = document.createElement('div');
+            el.className = 'floating-number';
+            el.innerText = text;
+            // 少し位置を散らす
+            const offsetX = (Math.random() - 0.5) * 40;
+            el.style.left = (x + offsetX) + 'px';
+            el.style.top = y + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        // 野獣飛び散り生成関数
+        function spawnPopYaju(x, y) {
+            const img = document.createElement('img');
+            img.src = '野獣.png'; // 画像ファイル名
+            img.className = 'pop-yaju';
+            
+            // ランダムなサイズ
+            const size = 30 + Math.random() * 50; 
+            img.style.width = size + 'px';
+            img.style.height = size + 'px';
+            
+            // クリック位置に配置
+            img.style.left = x + 'px';
+            img.style.top = y + 'px';
+            
+            document.body.appendChild(img);
+            setTimeout(() => img.remove(), 1000);
+        }
+
+        // --- 背景の雨（オートエフェクト） ---
+        function spawnFallingYaju() {
+            const layer = document.getElementById('effect-layer');
+            const img = document.createElement('img');
+            img.src = '野獣.png';
+            img.className = 'falling-yaju';
+            
+            // ランダム設定
+            const startX = Math.random() * 100; // 0%~100%
+            const duration = 2 + Math.random() * 3; // 2~5秒で落下
+            const size = 20 + Math.random() * 60; // サイズ
+            
+            img.style.left = startX + 'vw';
+            img.style.width = size + 'px';
+            img.style.height = size + 'px';
+            img.style.animationDuration = duration + 's';
+
+            layer.appendChild(img);
+
+            // アニメーション終わったら消す
+            setTimeout(() => img.remove(), duration * 1000);
+        }
+
+        // 購入処理
+        function buyItem(index) {
+            const item = items[index];
+            const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
+            if (gameData.score >= cost) {
+                gameData.score -= cost;
+                item.count++;
+                if (item.type === 'click') gameData.clickPower += item.power;
+                else gameData.autoIncome += item.power;
+                updateDisplay();
+            }
+        }
+
+        // メインループ
+        setInterval(() => {
+            if (gameData.autoIncome > 0) {
+                gameData.score += gameData.autoIncome / 10;
+                updateDisplay();
+
+                // 収入に応じて雨を降らせる確率を変える
+                // 収入が多いほど確率アップ（最大30%の確率で0.1秒ごとに生成）
+                let chance = Math.min(gameData.autoIncome / 500, 0.5);
+                if (Math.random() < chance + 0.05) { // 最低でも5%の確率で降る
+                    spawnFallingYaju();
+                }
+            }
+        }, 100);
+
+        initShop();
+        updateDisplay();
+    </script>
+</body>
+</html>
