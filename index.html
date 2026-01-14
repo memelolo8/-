@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：カオス増量版</title>
+    <title>野獣クリッカー：音付き完全版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -13,28 +13,41 @@
             margin: 0;
             padding: 0;
             user-select: none;
-            overflow: hidden; /* スクロール禁止 */
+            overflow: hidden;
             height: 100vh;
             width: 100vw;
             position: relative;
         }
 
-        /* 背景エフェクト用のレイヤー */
+        /* 音量注意の表示 */
+        #mute-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: #555;
+            color: #fff;
+            border: 1px solid #777;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 0.8em;
+        }
+
         #effect-layer {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* クリックを邪魔しない */
+            pointer-events: none;
             z-index: 0;
             overflow: hidden;
         }
 
-        /* ゲームUIレイヤー */
         .game-ui {
             position: relative;
-            z-index: 10; /* 背景より手前に表示 */
+            z-index: 10;
             display: flex;
             height: 100%;
             padding: 20px;
@@ -42,14 +55,12 @@
             gap: 20px;
         }
 
-        /* スマホ対応 */
         @media (max-width: 768px) {
             .game-ui { flex-direction: column; overflow-y: auto; }
             .shop-section { width: 100% !important; height: 50% !important; }
             .click-section { height: 40% !important; }
         }
 
-        /* 左側：クリッカーエリア */
         .click-section {
             flex: 1;
             display: flex;
@@ -89,10 +100,9 @@
 
         .click-area:active { transform: scale(0.90); }
 
-        /* 右側：ショップエリア */
         .shop-section {
             flex: 1;
-            background: rgba(51, 51, 51, 0.9); /* 少し透けさせる */
+            background: rgba(51, 51, 51, 0.9);
             border-radius: 10px;
             padding: 10px;
             display: flex;
@@ -137,9 +147,7 @@
         .item-cost { color: #ffcc00; font-weight: bold; font-size: 0.9em; }
         .item-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
 
-        /* --- エフェクト用CSS --- */
-
-        /* タップ時に飛び散る野獣 */
+        /* エフェクト */
         .pop-yaju {
             position: absolute;
             pointer-events: none;
@@ -153,7 +161,6 @@
             100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5) rotate(360deg); }
         }
 
-        /* 背景に降る野獣 */
         .falling-yaju {
             position: absolute;
             top: -100px;
@@ -168,7 +175,6 @@
             100% { transform: translateY(110vh) rotate(360deg); }
         }
 
-        /* 数字のポップ */
         .floating-number {
             position: absolute;
             color: #fff;
@@ -189,6 +195,10 @@
 </head>
 <body>
 
+    <audio id="bgm" src="bgm.mp3" loop></audio>
+
+    <button id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
+
     <div id="effect-layer"></div>
 
     <div class="game-ui">
@@ -202,6 +212,7 @@
             <div class="click-area" onclick="clickYaju(event)">
                 <img src="野獣.png" alt="野獣先輩">
             </div>
+            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックで音楽開始</div>
         </div>
 
         <div class="shop-section">
@@ -212,8 +223,20 @@
 
     <script>
         let gameData = { score: 0, clickPower: 1, autoIncome: 0 };
+        let isMuted = false;
+        let bgmStarted = false;
 
-        // アイテムリスト
+        // BGMの音量設定 (0.0 ～ 1.0)
+        // ここで小さめに設定しています (0.2 = 20%)
+        const BGM_VOLUME = 0.2; 
+        const SE_VOLUME = 0.6;
+
+        const bgm = document.getElementById('bgm');
+        bgm.volume = BGM_VOLUME;
+
+        // 効果音を読み込む (連打に対応するため都度再生する仕組みにします)
+        const tapSoundUrl = "tap.mp3"; 
+
         const items = [
             { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
             { name: "柔らかい枕", type: "auto", baseCost: 50, power: 1, count: 0 },
@@ -227,7 +250,6 @@
             { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 }
         ];
 
-        // 初期化
         function initShop() {
             const container = document.getElementById('shop-items');
             items.forEach((item, index) => {
@@ -246,7 +268,6 @@
             });
         }
 
-        // 表示更新
         function updateDisplay() {
             document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
             document.getElementById('sps').innerText = gameData.autoIncome.toLocaleString();
@@ -262,25 +283,52 @@
             });
         }
 
-        // --- タップ処理（エフェクト追加） ---
+        // --- 音を鳴らす関数 ---
+        function playTapSound() {
+            if (isMuted) return;
+            // 連打しても音が重なるように、毎回新しいAudioオブジェクトを作る
+            let sound = new Audio(tapSoundUrl);
+            sound.volume = SE_VOLUME;
+            sound.play().catch(e => console.log("Sound play error:", e));
+        }
+
+        // ミュート切り替え
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('mute-btn');
+            if (isMuted) {
+                bgm.pause();
+                btn.innerText = "🔇 音量OFF";
+                btn.style.background = "#800";
+            } else {
+                bgm.play().catch(()=>{});
+                btn.innerText = "🔊 音量ON";
+                btn.style.background = "#555";
+            }
+        }
+
+        // --- タップ処理 ---
         function clickYaju(event) {
+            // 初回クリック時にBGMを開始する（ブラウザの制限対策）
+            if (!bgmStarted && !isMuted) {
+                bgm.play().catch(e => console.log("BGM play error:", e));
+                bgmStarted = true;
+            }
+
+            // 音を鳴らす
+            playTapSound();
+
             gameData.score += gameData.clickPower;
-            
-            // 1. 数字が飛び出る
             spawnFloatingText(event.clientX, event.clientY, "+" + gameData.clickPower);
-
-            // 2. 野獣が飛び散る
             spawnPopYaju(event.clientX, event.clientY);
-
             updateDisplay();
         }
 
-        // 数字生成関数
+        // エフェクト関数群
         function spawnFloatingText(x, y, text) {
             const el = document.createElement('div');
             el.className = 'floating-number';
             el.innerText = text;
-            // 少し位置を散らす
             const offsetX = (Math.random() - 0.5) * 40;
             el.style.left = (x + offsetX) + 'px';
             el.style.top = y + 'px';
@@ -288,49 +336,35 @@
             setTimeout(() => el.remove(), 800);
         }
 
-        // 野獣飛び散り生成関数
         function spawnPopYaju(x, y) {
             const img = document.createElement('img');
-            img.src = '野獣.png'; // 画像ファイル名
+            img.src = '野獣.png'; 
             img.className = 'pop-yaju';
-            
-            // ランダムなサイズ
             const size = 30 + Math.random() * 50; 
             img.style.width = size + 'px';
             img.style.height = size + 'px';
-            
-            // クリック位置に配置
             img.style.left = x + 'px';
             img.style.top = y + 'px';
-            
             document.body.appendChild(img);
             setTimeout(() => img.remove(), 1000);
         }
 
-        // --- 背景の雨（オートエフェクト） ---
         function spawnFallingYaju() {
             const layer = document.getElementById('effect-layer');
             const img = document.createElement('img');
             img.src = '野獣.png';
             img.className = 'falling-yaju';
-            
-            // ランダム設定
-            const startX = Math.random() * 100; // 0%~100%
-            const duration = 2 + Math.random() * 3; // 2~5秒で落下
-            const size = 20 + Math.random() * 60; // サイズ
-            
+            const startX = Math.random() * 100;
+            const duration = 2 + Math.random() * 3;
+            const size = 20 + Math.random() * 60;
             img.style.left = startX + 'vw';
             img.style.width = size + 'px';
             img.style.height = size + 'px';
             img.style.animationDuration = duration + 's';
-
             layer.appendChild(img);
-
-            // アニメーション終わったら消す
             setTimeout(() => img.remove(), duration * 1000);
         }
 
-        // 購入処理
         function buyItem(index) {
             const item = items[index];
             const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
@@ -343,16 +377,12 @@
             }
         }
 
-        // メインループ
         setInterval(() => {
             if (gameData.autoIncome > 0) {
                 gameData.score += gameData.autoIncome / 10;
                 updateDisplay();
-
-                // 収入に応じて雨を降らせる確率を変える
-                // 収入が多いほど確率アップ（最大30%の確率で0.1秒ごとに生成）
                 let chance = Math.min(gameData.autoIncome / 500, 0.5);
-                if (Math.random() < chance + 0.05) { // 最低でも5%の確率で降る
+                if (Math.random() < chance + 0.05) { 
                     spawnFallingYaju();
                 }
             }
