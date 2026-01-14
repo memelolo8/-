@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：フィーバー実装版</title>
+    <title>野獣クリッカー：音響強化版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -35,7 +35,7 @@
 
         /* ボーナス表示バナー */
         #bonus-banner {
-            display: none; /* 最初は隠す */
+            display: none;
             position: absolute;
             top: 15%;
             left: 50%;
@@ -84,14 +84,17 @@
             font-size: 0.8em;
         }
 
-        /* 次のボーナスまでのタイマー（小さく表示） */
+        /* 次のボーナスまでのタイマー */
         #next-bonus-display {
             position: absolute;
             top: 10px;
             left: 10px;
             color: #aaa;
-            font-size: 0.8em;
+            font-size: 0.9em;
             z-index: 1000;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
         }
 
         #effect-layer {
@@ -213,15 +216,16 @@
             0% { opacity: 1; transform: translateY(0) scale(1); }
             100% { opacity: 0; transform: translateY(-80px) scale(1.5); }
         }
-
     </style>
 </head>
 <body>
 
     <audio id="bgm" src="bgm.mp3" loop></audio>
-    <button id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
+    <audio id="bonus-bgm" src="bonus_bgm.mp3" loop></audio> <button id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
 
-    <div id="next-bonus-display">次の野獣FEVERまで: <span id="next-bonus-time">60</span>秒</div>
+    <div id="next-bonus-display">
+        ボーナスタイムまで: <span id="next-bonus-time" style="font-weight:bold; color:#ffcc00;">60</span> 秒
+    </div>
 
     <div id="bonus-banner">
         <div id="bonus-text">野獣 FEVER!!<br>x5</div>
@@ -241,7 +245,7 @@
             <div class="click-area" onclick="clickYaju(event)">
                 <img src="野獣.png" alt="野獣先輩">
             </div>
-            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックで音楽開始</div>
+            <div style="margin-top:10px; font-size:0.8em; color:#aaa;">※画面クリックでスタート</div>
         </div>
 
         <div class="shop-section">
@@ -255,22 +259,29 @@
         let isMuted = false;
         let bgmStarted = false;
 
-        // 音量設定
-        const BGM_VOLUME = 0.2; 
-        const SE_VOLUME = 0.6; 
-
-        // ボーナス設定
-        const BONUS_INTERVAL = 60; // ボーナス発生間隔（秒）
-        const BONUS_DURATION = 10; // ボーナス持続時間（秒）
-        const BONUS_MULTIPLIER = 5; // ボーナス中の倍率（5倍）
+        // ===================================
+        // ▼ 設定エリア ▼
+        // ===================================
+        const BGM_VOLUME = 0.2;  // BGM音量 (0.2)
+        const SE_VOLUME = 0.3;   // 効果音音量 (0.3)
         
-        let bonusTimer = 0;       // ボーナス中の残り時間
-        let nextBonusTimer = BONUS_INTERVAL; // 次のボーナスまでの時間
-        let isBonusActive = false; // ボーナス中かどうか
+        const BONUS_INTERVAL = 60; // ボーナス発生間隔 (秒)
+        const BONUS_DURATION = 10; // ボーナス持続時間 (秒)
+        // ===================================
 
+        // 音声要素の取得
         const bgm = document.getElementById('bgm');
+        const bonusBgm = document.getElementById('bonus-bgm');
         bgm.volume = BGM_VOLUME;
-        const tapSoundUrl = "tap.mp3"; 
+        bonusBgm.volume = BGM_VOLUME; // ボーナスBGMも同じ音量
+
+        // 効果音ファイルパス
+        const tapSoundUrl = "tap.mp3";
+        const buySoundUrl = "buy.mp3"; // 追加: 購入音
+
+        let bonusTimer = 0;
+        let nextBonusTimer = BONUS_INTERVAL;
+        let isBonusActive = false;
 
         const items = [
             { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
@@ -306,13 +317,12 @@
         function updateDisplay() {
             document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
             
-            // ボーナス中はSPS表示も赤字で5倍表示にする
-            let currentSps = isBonusActive ? gameData.autoIncome * BONUS_MULTIPLIER : gameData.autoIncome;
+            let currentSps = isBonusActive ? gameData.autoIncome * 5 : gameData.autoIncome;
             let spsEl = document.getElementById('sps');
             spsEl.innerText = currentSps.toLocaleString();
             spsEl.style.color = isBonusActive ? '#ff0000' : '#fff';
             
-            // 次のボーナスまでの表示
+            // カウントダウン表示更新
             document.getElementById('next-bonus-time').innerText = nextBonusTimer;
 
             items.forEach((item, index) => {
@@ -326,9 +336,10 @@
             });
         }
 
-        function playTapSound() {
+        // 汎用SE再生関数
+        function playSound(url) {
             if (isMuted) return;
-            let sound = new Audio(tapSoundUrl);
+            let sound = new Audio(url);
             sound.volume = SE_VOLUME;
             sound.play().catch(e => {});
         }
@@ -336,21 +347,37 @@
         function toggleMute() {
             isMuted = !isMuted;
             const btn = document.getElementById('mute-btn');
+            
             if (isMuted) {
+                // ミュート時
                 bgm.pause();
+                bonusBgm.pause();
                 btn.innerText = "🔇 音量OFF";
                 btn.style.background = "#800";
             } else {
-                bgm.play().catch(()=>{});
+                // ミュート解除時
+                // 現在の状態に合わせて再生するBGMを選ぶ
+                if (isBonusActive) {
+                    bonusBgm.play().catch(()=>{});
+                } else if (bgmStarted) {
+                    bgm.play().catch(()=>{});
+                }
                 btn.innerText = "🔊 音量ON";
                 btn.style.background = "#555";
             }
         }
 
-        // --- ボーナス管理システム ---
+        // --- ボーナス管理 ---
         function startBonus() {
             isBonusActive = true;
             bonusTimer = BONUS_DURATION;
+            
+            // BGM切り替え
+            if (!isMuted && bgmStarted) {
+                bgm.pause();
+                bonusBgm.currentTime = 0;
+                bonusBgm.play().catch(()=>{});
+            }
             
             // 演出ON
             document.body.classList.add('bonus-mode');
@@ -360,7 +387,13 @@
 
         function endBonus() {
             isBonusActive = false;
-            nextBonusTimer = BONUS_INTERVAL; // タイマーリセット
+            nextBonusTimer = BONUS_INTERVAL;
+            
+            // BGM戻す
+            if (!isMuted && bgmStarted) {
+                bonusBgm.pause();
+                bgm.play().catch(()=>{});
+            }
             
             // 演出OFF
             document.body.classList.remove('bonus-mode');
@@ -368,59 +401,65 @@
             updateDisplay();
         }
 
-        // 1秒ごとのタイマーループ
         setInterval(() => {
             if (isBonusActive) {
-                // ボーナス中の処理
                 bonusTimer--;
                 document.getElementById('bonus-timer').innerText = `残り ${bonusTimer} 秒`;
-                if (bonusTimer <= 0) {
-                    endBonus();
-                }
+                if (bonusTimer <= 0) endBonus();
             } else {
-                // 通常時の処理
                 nextBonusTimer--;
-                if (nextBonusTimer <= 0) {
-                    startBonus();
-                }
+                if (nextBonusTimer <= 0) startBonus();
             }
-            updateDisplay(); // カウントダウン表示更新のため
+            updateDisplay();
         }, 1000);
 
-        // --- ゲームループ & インタラクション ---
-
+        // --- ゲームアクション ---
         function clickYaju(event) {
-            if (!bgmStarted && !isMuted) {
-                bgm.play().catch(e => {});
+            if (!bgmStarted) {
                 bgmStarted = true;
+                if (!isMuted) bgm.play().catch(e => {});
             }
-            playTapSound();
+            
+            // タップ音
+            playSound(tapSoundUrl);
 
-            // ボーナス中はクリック力も倍増
             let power = gameData.clickPower;
-            if (isBonusActive) power *= BONUS_MULTIPLIER;
+            if (isBonusActive) power *= 5;
 
             gameData.score += power;
-            
-            // 浮かぶ文字（ボーナス時は赤字で大きく）
             spawnFloatingText(event.clientX, event.clientY, "+" + power, isBonusActive);
             spawnPopYaju(event.clientX, event.clientY);
             updateDisplay();
         }
 
+        function buyItem(index) {
+            const item = items[index];
+            const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
+            
+            if (gameData.score >= cost) {
+                gameData.score -= cost;
+                item.count++;
+
+                // 購入音
+                playSound(buySoundUrl);
+
+                if (item.type === 'click') gameData.clickPower += item.power;
+                else gameData.autoIncome += item.power;
+                updateDisplay();
+            }
+        }
+
+        // エフェクト群
         function spawnFloatingText(x, y, text, isCritical) {
             const el = document.createElement('div');
             el.className = 'floating-number';
             el.innerText = text;
-            
-            // クリティカル（ボーナス）時のスタイル
             if (isCritical) {
                 el.style.color = '#ff0000';
                 el.style.fontSize = '3em';
                 el.style.textShadow = '0 0 5px #fff';
                 el.style.zIndex = 200;
             }
-
             const offsetX = (Math.random() - 0.5) * 40;
             el.style.left = (x + offsetX) + 'px';
             el.style.top = y + 'px';
@@ -457,35 +496,18 @@
             setTimeout(() => img.remove(), duration * 1000);
         }
 
-        function buyItem(index) {
-            const item = items[index];
-            const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
-            if (gameData.score >= cost) {
-                gameData.score -= cost;
-                item.count++;
-                if (item.type === 'click') gameData.clickPower += item.power;
-                else gameData.autoIncome += item.power;
-                updateDisplay();
-            }
-        }
-
-        // 自動収入ループ (0.1秒ごと)
+        // オートループ
         setInterval(() => {
             if (gameData.autoIncome > 0) {
-                // ボーナス倍率の適用
                 let income = gameData.autoIncome;
-                if (isBonusActive) income *= BONUS_MULTIPLIER;
+                if (isBonusActive) income *= 5;
 
                 gameData.score += income / 10;
                 updateDisplay();
                 
-                // ボーナス中は雨がもっと降る
                 let chance = Math.min(gameData.autoIncome / 500, 0.5);
-                if (isBonusActive) chance += 0.3; // 確率アップ
-
-                if (Math.random() < chance + 0.05) { 
-                    spawnFallingYaju();
-                }
+                if (isBonusActive) chance += 0.3;
+                if (Math.random() < chance + 0.05) spawnFallingYaju();
             }
         }, 100);
 
