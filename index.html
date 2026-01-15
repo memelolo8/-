@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：セーブ機能付き</title>
+    <title>野獣クリッカー：見やすさ改善版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -97,7 +97,6 @@
         }
         #sps-display { font-size: 0.6em; color: #ddd; margin-top: 5px; text-shadow: 1px 1px 2px #000; }
 
-        /* アイコンサイズ (200px) */
         .click-area {
             margin-top: 20px; width: 200px; height: 200px;
             cursor: pointer; transition: transform 0.05s; border-radius: 50%;
@@ -125,7 +124,13 @@
         }
         .item:hover { background: rgba(80, 80, 80, 0.9); transform: scale(1.02); }
         .item.disabled { opacity: 0.5; pointer-events: none; background: #222; }
-        .item-name { font-weight: bold; color: #fff; font-size: 0.9em; }
+        .item-name { font-weight: bold; color: #fff; font-size: 1.0em; margin-bottom: 3px; }
+        
+        /* わかりやすい説明用のスタイル */
+        .item-effect { font-size: 0.8em; margin-bottom: 3px; display: block; }
+        .effect-click { color: #ffaa00; font-weight: bold; } /* クリック強化の色 */
+        .effect-auto { color: #00aaff; font-weight: bold; }  /* 自動収入の色 */
+
         .item-cost { color: #ffcc00; font-weight: bold; font-size: 0.9em; }
         .item-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
 
@@ -185,14 +190,12 @@
         let isMuted = false;
         let bgmStarted = false;
 
-        // 設定
         const BGM_VOLUME = 0.2;
         const SE_VOLUME = 0.3;
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
-        const SAVE_KEY = 'yaju_clicker_save_v1'; // セーブデータのキー
+        const SAVE_KEY = 'yaju_clicker_save_v2'; 
 
-        // 音声要素
         const bgm = document.getElementById('bgm');
         const bonusBgm = document.getElementById('bonus-bgm');
         bgm.volume = BGM_VOLUME;
@@ -218,18 +221,15 @@
             { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 }
         ];
 
-        // --- セーブ & ロード機能 ---
-        
         function saveGame() {
             const saveObj = {
                 score: gameData.score,
                 clickPower: gameData.clickPower,
                 autoIncome: gameData.autoIncome,
-                itemCounts: items.map(item => item.count) // アイテムの個数だけ配列で保存
+                itemCounts: items.map(item => item.count)
             };
             localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
             
-            // 保存通知
             const notice = document.getElementById('save-notice');
             notice.style.opacity = 1;
             setTimeout(() => notice.style.opacity = 0, 1000);
@@ -243,30 +243,23 @@
                     gameData.score = parsed.score || 0;
                     gameData.clickPower = parsed.clickPower || 1;
                     gameData.autoIncome = parsed.autoIncome || 0;
-
                     if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
                         parsed.itemCounts.forEach((count, index) => {
-                            if (items[index]) {
-                                items[index].count = count;
-                            }
+                            if (items[index]) items[index].count = count;
                         });
                     }
-                    console.log("Game Loaded");
-                } catch (e) {
-                    console.error("Save data corrupted", e);
-                }
+                } catch (e) { console.error("Save data corrupted", e); }
             }
         }
 
         function resetGame() {
-            if(confirm("データを完全に削除して、最初からやり直しますか？")) {
+            if(confirm("データを削除してリセットしますか？")) {
                 localStorage.removeItem(SAVE_KEY);
                 location.reload();
             }
         }
 
-        // --- ゲーム初期化 ---
-
+        // --- ここでリスト表示をわかりやすく変更 ---
         function initShop() {
             const container = document.getElementById('shop-items');
             container.innerHTML = '';
@@ -275,10 +268,23 @@
                 div.className = 'item';
                 div.id = `item-${index}`;
                 div.onclick = () => buyItem(index);
+                
+                // タイプによって表示を変える
+                let typeLabel = "";
+                let typeClass = "";
+                if (item.type === 'click') {
+                    typeLabel = `👆 タップで +${item.power}`;
+                    typeClass = "effect-click";
+                } else {
+                    typeLabel = `⏱️ 毎秒 +${item.power}`;
+                    typeClass = "effect-auto";
+                }
+
                 div.innerHTML = `
                     <div>
-                        <div class="item-name">${item.name} (+${item.power})</div>
-                        <div class="item-cost"><span id="cost-${index}">${item.baseCost}</span> YJ</div>
+                        <div class="item-name">${item.name}</div>
+                        <span class="item-effect ${typeClass}">${typeLabel}</span>
+                        <div class="item-cost">価格: <span id="cost-${index}">${item.baseCost}</span></div>
                     </div>
                     <div class="item-count" id="count-${index}">0</div>
                 `;
@@ -352,7 +358,6 @@
             updateDisplay();
         }
 
-        // ボーナス管理ループ
         setInterval(() => {
             if (isBonusActive) {
                 bonusTimer--;
@@ -370,7 +375,6 @@
                 bgmStarted = true;
                 if (!isMuted) bgm.play().catch(e => {});
             }
-            
             playSound(tapSoundUrl);
             let power = gameData.clickPower;
             if (isBonusActive) power *= 5;
@@ -390,7 +394,7 @@
                 if (item.type === 'click') gameData.clickPower += item.power;
                 else gameData.autoIncome += item.power;
                 updateDisplay();
-                saveGame(); // 購入時にすぐセーブ
+                saveGame();
             }
         }
 
@@ -440,7 +444,6 @@
             setTimeout(() => img.remove(), duration * 1000);
         }
 
-        // オートループ
         setInterval(() => {
             if (gameData.autoIncome > 0) {
                 let income = gameData.autoIncome;
@@ -453,16 +456,11 @@
             }
         }, 100);
 
-        // オートセーブ (5秒ごと)
-        setInterval(() => {
-            saveGame();
-        }, 5000);
+        setInterval(() => { saveGame(); }, 5000);
 
-        // --- 起動処理 ---
-        loadGame(); // ロードしてから
-        initShop(); // ショップを描画し
-        updateDisplay(); // 表示を更新
-
+        loadGame();
+        initShop();
+        updateDisplay();
     </script>
 </body>
 </html>
