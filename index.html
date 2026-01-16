@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：完全版（データ引継ぎ）</title>
+    <title>野獣クリッカー：アイコン振動版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -15,21 +15,19 @@
             position: relative; transition: background-color 0.5s;
         }
 
-        /* アニメーション定義 */
+        /* 振動アニメーション */
         @keyframes shake {
-            0% { transform: translate(1px, 1px) rotate(0deg); }
-            10% { transform: translate(-1px, -2px) rotate(-1deg); }
-            20% { transform: translate(-3px, 0px) rotate(1deg); }
-            30% { transform: translate(3px, 2px) rotate(0deg); }
-            40% { transform: translate(1px, -1px) rotate(1deg); }
-            50% { transform: translate(-1px, 2px) rotate(-1deg); }
-            60% { transform: translate(-3px, 1px) rotate(0deg); }
-            70% { transform: translate(3px, 1px) rotate(-1deg); }
-            80% { transform: translate(-1px, -1px) rotate(1deg); }
-            90% { transform: translate(1px, 2px) rotate(0deg); }
-            100% { transform: translate(1px, -2px) rotate(-1deg); }
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-3px, 0) rotate(-5deg); }
+            40% { transform: translate(3px, 0) rotate(5deg); }
+            60% { transform: translate(-3px, 0) rotate(-5deg); }
+            80% { transform: translate(3px, 0) rotate(5deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
         }
-        .shaking { animation: shake 0.2s; animation-iteration-count: 1; }
+        /* アイコン用振動クラス */
+        .shaking {
+            animation: shake 0.2s ease-in-out;
+        }
 
         body.bonus-mode { animation: rainbow-bg 0.5s infinite alternate; }
         @keyframes rainbow-bg {
@@ -226,10 +224,7 @@
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
         
-        // ★★★ 最新のセーブキー ★★★
         const SAVE_KEY = 'yaju_clicker_save_v3'; 
-        
-        // ★★★ 過去のセーブキー（ここから探します） ★★★
         const LEGACY_KEYS = ['yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
 
         const GACHA_COST = 100000;
@@ -276,21 +271,14 @@
             setTimeout(() => notice.style.opacity = 0, 1000);
         }
 
-        // ★★★ スマートロード機能（過去データ探索） ★★★
         function loadGame() {
             let savedData = localStorage.getItem(SAVE_KEY);
-            
-            // v3がなければ、v2, v1を探しに行く
             if (!savedData) {
                 for (let key of LEGACY_KEYS) {
                     savedData = localStorage.getItem(key);
-                    if (savedData) {
-                        console.log("古いバージョンのデータが見つかりました: " + key);
-                        break; 
-                    }
+                    if (savedData) break; 
                 }
             }
-
             if (savedData) {
                 try {
                     const parsed = JSON.parse(savedData);
@@ -311,7 +299,6 @@
         function resetGame() {
             if(confirm("データを完全に削除して、最初からやり直しますか？")) {
                 localStorage.removeItem(SAVE_KEY);
-                // 過去のデータも消す
                 LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
                 location.reload();
             }
@@ -454,8 +441,13 @@
         function clickYaju(event) {
             if (!bgmStarted) { bgmStarted = true; if (!isMuted) bgm.play().catch(e => {}); }
             playSound(tapSoundUrl);
-            document.body.classList.add('shaking');
-            setTimeout(() => document.body.classList.remove('shaking'), 200);
+            
+            // アイコンのみを振動させる（連打対応）
+            const clickArea = document.querySelector('.click-area');
+            clickArea.classList.remove('shaking');
+            void clickArea.offsetWidth; // リフロー強制
+            clickArea.classList.add('shaking');
+            
             let power = gameData.clickPower * getGlobalMultiplier();
             if (isBonusActive) power *= 5;
             gameData.score += power;
