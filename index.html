@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：アイコン振動版</title>
+    <title>野獣クリッカー：実績＆最終章</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -15,7 +15,7 @@
             position: relative; transition: background-color 0.5s;
         }
 
-        /* 振動アニメーション */
+        /* アニメーション定義 */
         @keyframes shake {
             0% { transform: translate(0, 0) rotate(0deg); }
             20% { transform: translate(-3px, 0) rotate(-5deg); }
@@ -24,10 +24,7 @@
             80% { transform: translate(3px, 0) rotate(5deg); }
             100% { transform: translate(0, 0) rotate(0deg); }
         }
-        /* アイコン用振動クラス */
-        .shaking {
-            animation: shake 0.2s ease-in-out;
-        }
+        .shaking { animation: shake 0.2s ease-in-out; }
 
         body.bonus-mode { animation: rainbow-bg 0.5s infinite alternate; }
         @keyframes rainbow-bg {
@@ -43,6 +40,22 @@
         }
         .luxury-car:active { transform: scale(0.9); }
         @keyframes drive-left { from { left: 110vw; } to { left: -300px; } }
+
+        /* 実績ポップアップ通知 */
+        .achievement-popup {
+            position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 100, 255, 0.9); color: white;
+            padding: 15px 25px; border-radius: 10px; border: 2px solid #00aaff;
+            box-shadow: 0 0 20px rgba(0, 170, 255, 0.5);
+            z-index: 3000; transition: top 0.5s ease-out;
+            text-align: left; width: 80%; max-width: 400px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .achievement-popup.show { top: 20px; }
+        .ach-icon { font-size: 2em; }
+        .ach-info { display: flex; flex-direction: column; }
+        .ach-title { font-weight: bold; font-size: 1.1em; color: #ffcc00; }
+        .ach-desc { font-size: 0.8em; }
 
         /* UIパーツ */
         #bonus-banner {
@@ -166,10 +179,19 @@
     <audio id="bgm" src="bgm.mp3" loop></audio>
     <audio id="bonus-bgm" src="bonus_bgm.mp3" loop></audio>
     
+    <div id="ach-popup" class="achievement-popup">
+        <div class="ach-icon">🏆</div>
+        <div class="ach-info">
+            <div class="ach-title">実績解除！</div>
+            <div id="ach-desc" class="ach-desc">実績名</div>
+        </div>
+    </div>
+
     <div class="status-panel">
         <div class="status-box">ボーナスまで: <span id="next-bonus-time" class="val-highlight">60</span> 秒</div>
         <div class="status-box">野獣ランク(転生): <span id="rank-display" class="val-highlight">0</span> (x<span id="rank-mult-display">1.0</span>)</div>
         <div class="status-box">ガチャ倍率: x<span id="gacha-mult-display" class="val-highlight">1.0</span></div>
+        <div class="status-box">実績ボーナス: x<span id="ach-mult-display" class="val-highlight">1.0</span></div>
     </div>
 
     <div class="controls">
@@ -214,8 +236,17 @@
     </div>
 
     <script>
-        // ゲームデータ
-        let gameData = { score: 0, clickPower: 1, autoIncome: 0, rank: 0, gachaMultiplier: 1.0 };
+        // ゲームデータ構造 v4 (実績、クリック総数追加)
+        let gameData = { 
+            score: 0, 
+            clickPower: 1, 
+            autoIncome: 0, 
+            rank: 0, 
+            gachaMultiplier: 1.0,
+            totalClicks: 0,
+            achievements: [] // 解除済みIDの配列
+        };
+        
         let isMuted = false;
         let bgmStarted = false;
 
@@ -224,8 +255,9 @@
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
         
-        const SAVE_KEY = 'yaju_clicker_save_v3'; 
-        const LEGACY_KEYS = ['yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
+        // ★v4 セーブキー
+        const SAVE_KEY = 'yaju_clicker_save_v4'; 
+        const LEGACY_KEYS = ['yaju_clicker_save_v3', 'yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
 
         const GACHA_COST = 100000;
         const REBIRTH_COST = 1000000;
@@ -241,6 +273,7 @@
         let nextBonusTimer = BONUS_INTERVAL;
         let isBonusActive = false;
 
+        // アイテムリスト (インフレ対応)
         const items = [
             { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
             { name: "柔らかい枕", type: "auto", baseCost: 50, power: 1, count: 0 },
@@ -251,10 +284,64 @@
             { name: "屋上", type: "auto", baseCost: 10000, power: 80, count: 0 },
             { name: "イキスギイクイク", type: "click", baseCost: 50000, power: 100, count: 0 },
             { name: "黒塗りの高級車", type: "auto", baseCost: 114514, power: 810, count: 0 },
-            { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 }
+            { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 },
+            // 新規追加アイテム
+            { name: "焼いてかない？", type: "click", baseCost: 50000000, power: 20000, count: 0 },
+            { name: "聖地巡礼", type: "auto", baseCost: 1000000000, power: 100000, count: 0 },
+            { name: "淫夢くん", type: "auto", baseCost: 100000000000, power: 5000000, count: 0 },
+            // ラスボス
+            { name: "真夏の夜の淫夢", type: "auto", baseCost: 8101145141919, power: 810191919, count: 0 }
         ];
 
-        function getGlobalMultiplier() { return (1 + gameData.rank * 0.5) * gameData.gachaMultiplier; }
+        // 実績リスト
+        const achievementList = [
+            { id: "first_click", name: "初投稿", desc: "初めてクリックする", condition: () => gameData.totalClicks >= 1 },
+            { id: "score_114514", name: "いいよ！来いよ！", desc: "114,514 YJ 貯める", condition: () => gameData.score >= 114514 },
+            { id: "rebirth_1", name: "生き返れ生き返れ", desc: "初めて転生する", condition: () => gameData.rank >= 1 },
+            { id: "score_100m", name: "大先輩", desc: "1億 YJ 貯める", condition: () => gameData.score >= 100000000 },
+            { id: "score_1t", name: "野獣の王", desc: "1兆 YJ 貯める", condition: () => gameData.score >= 1000000000000 },
+            { id: "buy_last", name: "完走した感想", desc: "最後のアイテムを買う", condition: () => items[items.length-1].count >= 1 }
+        ];
+
+        function getAchievementMultiplier() {
+            // 実績1つにつき +10% (1.1倍)
+            return 1 + (gameData.achievements.length * 0.1);
+        }
+
+        function getGlobalMultiplier() { 
+            return (1 + gameData.rank * 0.5) * gameData.gachaMultiplier * getAchievementMultiplier(); 
+        }
+
+        function checkAchievements() {
+            let unlocked = false;
+            achievementList.forEach(ach => {
+                if (!gameData.achievements.includes(ach.id)) {
+                    if (ach.condition()) {
+                        gameData.achievements.push(ach.id);
+                        showAchievementPopup(ach.name, ach.desc);
+                        unlocked = true;
+                    }
+                }
+            });
+            if(unlocked) {
+                saveGame();
+                updateDisplay();
+            }
+        }
+
+        function showAchievementPopup(title, desc) {
+            const popup = document.getElementById('ach-popup');
+            const descEl = document.getElementById('ach-desc');
+            const titleEl = document.querySelector('.ach-title');
+            titleEl.innerText = title;
+            descEl.innerText = desc;
+            
+            playSound(buySoundUrl); // 音を流用
+            popup.classList.add('show');
+            setTimeout(() => {
+                popup.classList.remove('show');
+            }, 4000);
+        }
 
         function saveGame() {
             const saveObj = {
@@ -263,6 +350,8 @@
                 autoIncome: gameData.autoIncome,
                 rank: gameData.rank,
                 gachaMultiplier: gameData.gachaMultiplier,
+                totalClicks: gameData.totalClicks,
+                achievements: gameData.achievements,
                 itemCounts: items.map(item => item.count)
             };
             localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
@@ -287,6 +376,8 @@
                     gameData.autoIncome = parsed.autoIncome || 0;
                     gameData.rank = parsed.rank || 0;
                     gameData.gachaMultiplier = parsed.gachaMultiplier || 1.0;
+                    gameData.totalClicks = parsed.totalClicks || 0;
+                    gameData.achievements = parsed.achievements || [];
                     if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
                         parsed.itemCounts.forEach((count, index) => {
                             if (items[index]) items[index].count = count;
@@ -319,6 +410,7 @@
                 playSound(buySoundUrl);
                 spawnFloatingText(car.getBoundingClientRect().left, car.getBoundingClientRect().top, `示談金 +${reward.toLocaleString()}`, true);
                 car.remove();
+                checkAchievements();
                 updateDisplay();
                 saveGame();
             };
@@ -352,6 +444,7 @@
                 gameData.score = 0; gameData.clickPower = 1; gameData.autoIncome = 0; items.forEach(i => i.count = 0);
                 gameData.rank++;
                 playSound(buySoundUrl);
+                checkAchievements(); // 転生実績チェック
                 alert(`転生完了！\n野獣ランクが ${gameData.rank} になりました！`);
                 saveGame();
                 location.reload();
@@ -386,10 +479,13 @@
             let spsEl = document.getElementById('sps');
             spsEl.innerText = Math.floor(finalAuto).toLocaleString();
             spsEl.style.color = isBonusActive ? '#ff0000' : '#fff';
+            
             document.getElementById('next-bonus-time').innerText = nextBonusTimer;
             document.getElementById('rank-display').innerText = gameData.rank;
             document.getElementById('rank-mult-display').innerText = (1 + gameData.rank * 0.5).toFixed(1);
             document.getElementById('gacha-mult-display').innerText = gameData.gachaMultiplier.toFixed(2);
+            document.getElementById('ach-mult-display').innerText = getAchievementMultiplier().toFixed(1);
+
             const rbBtn = document.getElementById('rebirth-btn');
             if (gameData.score >= REBIRTH_COST) { rbBtn.classList.remove('locked'); rbBtn.innerText = "🔄 転生可能！"; } 
             else { rbBtn.classList.add('locked'); rbBtn.innerText = `転生まであと ${(REBIRTH_COST - gameData.score).toLocaleString()} YJ`; }
@@ -442,17 +538,21 @@
             if (!bgmStarted) { bgmStarted = true; if (!isMuted) bgm.play().catch(e => {}); }
             playSound(tapSoundUrl);
             
-            // アイコンのみを振動させる（連打対応）
+            // アイコンのみを振動させる
             const clickArea = document.querySelector('.click-area');
             clickArea.classList.remove('shaking');
-            void clickArea.offsetWidth; // リフロー強制
+            void clickArea.offsetWidth;
             clickArea.classList.add('shaking');
             
             let power = gameData.clickPower * getGlobalMultiplier();
             if (isBonusActive) power *= 5;
             gameData.score += power;
+            gameData.totalClicks++; // クリック数カウント
+            
             spawnFloatingText(event.clientX, event.clientY, "+" + Math.floor(power).toLocaleString(), isBonusActive);
             spawnParticles(event.clientX, event.clientY);
+            
+            checkAchievements(); // 実績チェック
             updateDisplay();
         }
 
@@ -463,6 +563,7 @@
                 gameData.score -= cost; item.count++;
                 playSound(buySoundUrl);
                 if (item.type === 'click') gameData.clickPower += item.power; else gameData.autoIncome += item.power;
+                checkAchievements();
                 updateDisplay(); saveGame();
             }
         }
@@ -506,6 +607,8 @@
                 let chance = Math.min(income / 500, 0.5); if (isBonusActive) chance += 0.3;
                 if (Math.random() < chance + 0.05) spawnFallingYaju();
             }
+            // 実績のチェック（所持金など）
+            checkAchievements();
         }, 100);
 
         setInterval(() => { saveGame(); }, 5000);
