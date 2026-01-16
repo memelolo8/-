@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：実績＆最終章</title>
+    <title>野獣クリッカー：実績リスト実装版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -57,6 +57,34 @@
         .ach-title { font-weight: bold; font-size: 1.1em; color: #ffcc00; }
         .ach-desc { font-size: 0.8em; }
 
+        /* 実績リストモーダル */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 4000; justify-content: center; align-items: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-content {
+            background: #333; width: 90%; max-width: 500px; max-height: 80vh;
+            border-radius: 10px; border: 2px solid #555; display: flex; flex-direction: column;
+        }
+        .modal-header {
+            padding: 15px; border-bottom: 1px solid #555; display: flex; justify-content: space-between; align-items: center;
+            font-weight: bold; font-size: 1.2em;
+        }
+        .modal-body { padding: 10px; overflow-y: auto; flex-grow: 1; text-align: left; }
+        .ach-item {
+            background: #444; margin-bottom: 8px; padding: 10px; border-radius: 5px;
+            display: flex; align-items: center; gap: 10px; border: 1px solid #555;
+            opacity: 0.5; /* 未解除は薄く */
+        }
+        .ach-item.unlocked { opacity: 1; border-color: #ffcc00; background: #554400; }
+        .ach-item-icon { font-size: 1.5em; }
+        .ach-item-text { flex-grow: 1; }
+        .ach-item-name { font-weight: bold; color: #ddd; }
+        .ach-item.unlocked .ach-item-name { color: #ffcc00; }
+        .ach-item-desc { font-size: 0.8em; color: #aaa; }
+        .close-btn { background: #800; border: none; color: white; padding: 5px 10px; cursor: pointer; border-radius: 5px; }
+
         /* UIパーツ */
         #bonus-banner {
             display: none; position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
@@ -92,10 +120,9 @@
         }
         .btn:hover { background: #666; } .btn:active { transform: scale(0.95); }
         .btn-reset { background: #800; border-color: #a00; }
+        .btn-ach { background: #aa8800; border-color: #ffcc00; font-weight: bold; color: #000; }
         .btn-gacha { background: #0055aa; border-color: #0077ff; font-weight: bold; }
-        .btn-gacha:hover { background: #0066cc; }
         .btn-rebirth { background: #5500aa; border-color: #8800ff; font-weight: bold; box-shadow: 0 0 10px #8800ff; }
-        .btn-rebirth:hover { background: #6600cc; }
         .btn-rebirth.locked { background: #333; border-color: #444; color: #666; box-shadow: none; pointer-events: none; }
 
         #save-notice {
@@ -187,6 +214,17 @@
         </div>
     </div>
 
+    <div id="ach-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>実績リスト</span>
+                <button class="close-btn" onclick="closeAchModal()">閉じる</button>
+            </div>
+            <div class="modal-body" id="ach-list-container">
+                </div>
+        </div>
+    </div>
+
     <div class="status-panel">
         <div class="status-box">ボーナスまで: <span id="next-bonus-time" class="val-highlight">60</span> 秒</div>
         <div class="status-box">野獣ランク(転生): <span id="rank-display" class="val-highlight">0</span> (x<span id="rank-mult-display">1.0</span>)</div>
@@ -200,6 +238,7 @@
             <button class="btn btn-reset" onclick="resetGame()">🗑️ 削除</button>
         </div>
         <div class="btn-row">
+            <button class="btn btn-ach" onclick="openAchModal()">🏆 実績</button>
             <button class="btn btn-gacha" onclick="pullGacha()">📦 ガチャ (10万YJ)</button>
         </div>
         <div class="btn-row">
@@ -255,7 +294,6 @@
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
         
-        // ★v4 セーブキー
         const SAVE_KEY = 'yaju_clicker_save_v4'; 
         const LEGACY_KEYS = ['yaju_clicker_save_v3', 'yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
 
@@ -273,7 +311,7 @@
         let nextBonusTimer = BONUS_INTERVAL;
         let isBonusActive = false;
 
-        // アイテムリスト (インフレ対応)
+        // アイテムリスト
         const items = [
             { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
             { name: "柔らかい枕", type: "auto", baseCost: 50, power: 1, count: 0 },
@@ -285,11 +323,9 @@
             { name: "イキスギイクイク", type: "click", baseCost: 50000, power: 100, count: 0 },
             { name: "黒塗りの高級車", type: "auto", baseCost: 114514, power: 810, count: 0 },
             { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 },
-            // 新規追加アイテム
             { name: "焼いてかない？", type: "click", baseCost: 50000000, power: 20000, count: 0 },
             { name: "聖地巡礼", type: "auto", baseCost: 1000000000, power: 100000, count: 0 },
             { name: "淫夢くん", type: "auto", baseCost: 100000000000, power: 5000000, count: 0 },
-            // ラスボス
             { name: "真夏の夜の淫夢", type: "auto", baseCost: 8101145141919, power: 810191919, count: 0 }
         ];
 
@@ -304,7 +340,6 @@
         ];
 
         function getAchievementMultiplier() {
-            // 実績1つにつき +10% (1.1倍)
             return 1 + (gameData.achievements.length * 0.1);
         }
 
@@ -336,11 +371,39 @@
             titleEl.innerText = title;
             descEl.innerText = desc;
             
-            playSound(buySoundUrl); // 音を流用
+            playSound(buySoundUrl); 
             popup.classList.add('show');
             setTimeout(() => {
                 popup.classList.remove('show');
             }, 4000);
+        }
+
+        // --- モーダル制御 ---
+        function openAchModal() {
+            const modal = document.getElementById('ach-modal');
+            const listContainer = document.getElementById('ach-list-container');
+            listContainer.innerHTML = '';
+
+            achievementList.forEach(ach => {
+                const isUnlocked = gameData.achievements.includes(ach.id);
+                const div = document.createElement('div');
+                div.className = `ach-item ${isUnlocked ? 'unlocked' : ''}`;
+                
+                div.innerHTML = `
+                    <div class="ach-item-icon">${isUnlocked ? '🏆' : '🔒'}</div>
+                    <div class="ach-item-text">
+                        <div class="ach-item-name">${ach.name}</div>
+                        <div class="ach-item-desc">${ach.desc}</div>
+                    </div>
+                `;
+                listContainer.appendChild(div);
+            });
+
+            modal.classList.add('open');
+        }
+
+        function closeAchModal() {
+            document.getElementById('ach-modal').classList.remove('open');
         }
 
         function saveGame() {
@@ -444,7 +507,7 @@
                 gameData.score = 0; gameData.clickPower = 1; gameData.autoIncome = 0; items.forEach(i => i.count = 0);
                 gameData.rank++;
                 playSound(buySoundUrl);
-                checkAchievements(); // 転生実績チェック
+                checkAchievements(); 
                 alert(`転生完了！\n野獣ランクが ${gameData.rank} になりました！`);
                 saveGame();
                 location.reload();
@@ -538,7 +601,6 @@
             if (!bgmStarted) { bgmStarted = true; if (!isMuted) bgm.play().catch(e => {}); }
             playSound(tapSoundUrl);
             
-            // アイコンのみを振動させる
             const clickArea = document.querySelector('.click-area');
             clickArea.classList.remove('shaking');
             void clickArea.offsetWidth;
@@ -547,12 +609,12 @@
             let power = gameData.clickPower * getGlobalMultiplier();
             if (isBonusActive) power *= 5;
             gameData.score += power;
-            gameData.totalClicks++; // クリック数カウント
+            gameData.totalClicks++; 
             
             spawnFloatingText(event.clientX, event.clientY, "+" + Math.floor(power).toLocaleString(), isBonusActive);
             spawnParticles(event.clientX, event.clientY);
             
-            checkAchievements(); // 実績チェック
+            checkAchievements();
             updateDisplay();
         }
 
@@ -607,7 +669,6 @@
                 let chance = Math.min(income / 500, 0.5); if (isBonusActive) chance += 0.3;
                 if (Math.random() < chance + 0.05) spawnFallingYaju();
             }
-            // 実績のチェック（所持金など）
             checkAchievements();
         }, 100);
 
