@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：見やすさ改善版</title>
+    <title>野獣クリッカー：エフェクト増量版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -20,17 +20,31 @@
             transition: background-color 0.5s;
         }
 
-        /* ボーナスタイム中の背景アニメーション */
+        /* 画面シェイクアニメーション */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shaking { animation: shake 0.2s; animation-iteration-count: 1; }
+
+        /* ボーナスタイム中の背景 */
         body.bonus-mode { animation: rainbow-bg 0.5s infinite alternate; }
         @keyframes rainbow-bg {
-            0% { background-color: #500; }
-            25% { background-color: #550; }
-            50% { background-color: #050; }
-            75% { background-color: #005; }
+            0% { background-color: #500; } 25% { background-color: #550; }
+            50% { background-color: #050; } 75% { background-color: #005; }
             100% { background-color: #505; }
         }
 
-        /* UIパーツ */
+        /* --- UIパーツ --- */
         #bonus-banner {
             display: none; position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
             width: 100%; z-index: 500; pointer-events: none;
@@ -40,83 +54,96 @@
             text-shadow: 0 0 10px #fff, 0 0 20px #ff00de, 0 0 40px #ff00de;
             animation: pulse-text 0.2s infinite alternate;
         }
-        #bonus-timer {
-            font-size: 2em; color: #fff; font-weight: bold; text-shadow: 2px 2px 0 #000; margin-top: 10px;
-        }
+        #bonus-timer { font-size: 2em; color: #fff; font-weight: bold; margin-top: 10px; text-shadow: 2px 2px 0 #000; }
         @keyframes pulse-text { from { transform: scale(1); } to { transform: scale(1.1); } }
 
-        /* ボタン群 */
+        /* ステータスとコントロール */
+        .status-panel {
+            position: absolute; top: 10px; left: 10px; text-align: left; z-index: 1000;
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .status-box {
+            background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 5px; font-size: 0.8em; color: #aaa;
+        }
+        .val-highlight { color: #ffcc00; font-weight: bold; }
+
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
-            display: flex; gap: 5px;
+            display: flex; flex-direction: column; gap: 5px; align-items: flex-end;
         }
+        .btn-row { display: flex; gap: 5px; }
         .btn {
             background: #555; color: #fff; border: 1px solid #777;
             padding: 5px 10px; cursor: pointer; border-radius: 5px; font-size: 0.8em;
+            transition: 0.2s;
         }
         .btn:hover { background: #666; }
-        .btn-reset { background: #800; border-color: #a00; font-size: 0.7em; }
+        .btn:active { transform: scale(0.95); }
+        .btn-reset { background: #800; border-color: #a00; }
+        .btn-gacha { background: #0055aa; border-color: #0077ff; font-weight: bold; }
+        .btn-gacha:hover { background: #0066cc; }
+        .btn-rebirth { background: #5500aa; border-color: #8800ff; font-weight: bold; box-shadow: 0 0 10px #8800ff; }
+        .btn-rebirth:hover { background: #6600cc; }
+        .btn-rebirth.locked { background: #333; border-color: #444; color: #666; box-shadow: none; pointer-events: none; }
 
-        /* セーブ通知 */
         #save-notice {
-            position: absolute; bottom: 10px; right: 10px;
-            font-size: 0.8em; color: #888; opacity: 0; transition: opacity 0.5s;
-            z-index: 1000; pointer-events: none;
+            position: absolute; bottom: 10px; right: 10px; font-size: 0.8em; color: #888; 
+            opacity: 0; transition: opacity 0.5s; z-index: 1000; pointer-events: none;
         }
-
-        #next-bonus-display {
-            position: absolute; top: 10px; left: 10px;
-            color: #aaa; font-size: 0.9em; z-index: 1000;
-            background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px;
-        }
-
         #effect-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 0; overflow: hidden;
         }
 
+        /* レイアウト */
         .game-ui {
             position: relative; z-index: 10; display: flex; height: 100%;
             padding: 20px; box-sizing: border-box; gap: 20px;
         }
-
         @media (max-width: 768px) {
             .game-ui { flex-direction: column; overflow-y: auto; }
             .shop-section { width: 100% !important; height: 50% !important; }
             .click-section { height: 40% !important; }
             #bonus-text { font-size: 3em; }
+            .status-panel { font-size: 0.8em; }
         }
-
-        .click-section {
-            flex: 1; display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-        }
-
-        #score-container {
-            font-size: 3em; font-weight: bold; text-shadow: 0 0 10px #000, 2px 2px 0px #ffcc00;
-        }
+        .click-section { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #score-container { font-size: 3em; font-weight: bold; text-shadow: 0 0 10px #000, 2px 2px 0px #ffcc00; margin-top: 20px; }
         #sps-display { font-size: 0.6em; color: #ddd; margin-top: 5px; text-shadow: 1px 1px 2px #000; }
 
+        /* メインアイコン（回転アニメーション追加） */
         .click-area {
-            margin-top: 20px; width: 200px; height: 200px;
+            margin-top: 10px; width: 200px; height: 200px;
             cursor: pointer; transition: transform 0.05s; border-radius: 50%;
             border: 8px solid #ffcc00; box-shadow: 0 0 50px rgba(255, 204, 0, 0.4);
             background-color: #fff; position: relative; z-index: 20;
         }
-        .click-area img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; }
         .click-area:active { transform: scale(0.90); }
 
+        /* 回転定義 */
+        @keyframes spin-slow { 100% { transform: rotate(360deg); } }
+        @keyframes spin-fast { 100% { transform: rotate(360deg) scale(1.1); } }
+
+        .click-area img {
+            width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none;
+            animation: spin-slow 20s linear infinite; /* 通常時はゆっくり回転 */
+        }
+        /* ボーナス時は高速回転 */
+        body.bonus-mode .click-area img {
+            animation: spin-fast 2s linear infinite;
+        }
+
+
+        /* ショップ */
         .shop-section {
             flex: 1; background: rgba(51, 51, 51, 0.9); border-radius: 10px;
             padding: 10px; display: flex; flex-direction: column;
             border: 2px solid #555; max-width: 450px; backdrop-filter: blur(5px);
         }
-
         .shop-header { border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 10px; font-weight: bold; }
         .item-list { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
         .item-list::-webkit-scrollbar { width: 8px; }
         .item-list::-webkit-scrollbar-thumb { background: #666; border-radius: 4px; }
-
         .item {
             display: flex; justify-content: space-between; align-items: center;
             background: rgba(68, 68, 68, 0.8); margin-bottom: 8px; padding: 10px;
@@ -125,20 +152,25 @@
         .item:hover { background: rgba(80, 80, 80, 0.9); transform: scale(1.02); }
         .item.disabled { opacity: 0.5; pointer-events: none; background: #222; }
         .item-name { font-weight: bold; color: #fff; font-size: 1.0em; margin-bottom: 3px; }
-        
-        /* わかりやすい説明用のスタイル */
         .item-effect { font-size: 0.8em; margin-bottom: 3px; display: block; }
-        .effect-click { color: #ffaa00; font-weight: bold; } /* クリック強化の色 */
-        .effect-auto { color: #00aaff; font-weight: bold; }  /* 自動収入の色 */
-
+        .effect-click { color: #ffaa00; font-weight: bold; } 
+        .effect-auto { color: #00aaff; font-weight: bold; }  
         .item-cost { color: #ffcc00; font-weight: bold; font-size: 0.9em; }
         .item-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
 
-        /* エフェクトCSS */
-        .pop-yaju { position: absolute; pointer-events: none; animation: popMove 1s ease-out forwards; border-radius: 50%; z-index: 100; }
-        @keyframes popMove { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5) rotate(0deg); } 100% { opacity: 0; transform: translate(-50%, -150px) scale(1.5) rotate(360deg); } }
+        /* エフェクト関連CSS */
+        /* 飛び散る粒子 */
+        .pop-particle {
+            position: absolute; pointer-events: none;
+            width: 30px; height: 30px; border-radius: 50%; z-index: 100;
+            transition: all 0.8s ease-out; opacity: 1;
+        }
+        
+        /* 背景の雨 */
         .falling-yaju { position: absolute; top: -100px; pointer-events: none; animation: fall linear forwards; opacity: 0.6; z-index: 1; }
         @keyframes fall { 0% { transform: translateY(0) rotate(0deg); } 100% { transform: translateY(110vh) rotate(360deg); } }
+        
+        /* 浮かぶ数字 */
         .floating-number { position: absolute; color: #fff; font-weight: bold; font-size: 2em; pointer-events: none; animation: floatText 0.8s ease-out forwards; text-shadow: 2px 2px 0 #000; z-index: 101; }
         @keyframes floatText { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
     </style>
@@ -148,13 +180,23 @@
     <audio id="bgm" src="bgm.mp3" loop></audio>
     <audio id="bonus-bgm" src="bonus_bgm.mp3" loop></audio>
     
-    <div class="controls">
-        <button class="btn" id="mute-btn" onclick="toggleMute()">🔊 音量ON</button>
-        <button class="btn btn-reset" onclick="resetGame()">🗑️ データ削除</button>
+    <div class="status-panel">
+        <div class="status-box">ボーナスまで: <span id="next-bonus-time" class="val-highlight">60</span> 秒</div>
+        <div class="status-box">野獣ランク(転生): <span id="rank-display" class="val-highlight">0</span> (x<span id="rank-mult-display">1.0</span>)</div>
+        <div class="status-box">ガチャ倍率: x<span id="gacha-mult-display" class="val-highlight">1.0</span></div>
     </div>
 
-    <div id="next-bonus-display">
-        ボーナスまで: <span id="next-bonus-time" style="font-weight:bold; color:#ffcc00;">60</span> 秒
+    <div class="controls">
+        <div class="btn-row">
+            <button class="btn" id="mute-btn" onclick="toggleMute()">🔊 音ON</button>
+            <button class="btn btn-reset" onclick="resetGame()">🗑️ 削除</button>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-gacha" onclick="pullGacha()">📦 ガチャ (10万YJ)</button>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-rebirth locked" id="rebirth-btn" onclick="doRebirth()">🔄 転生 (100万YJ~)</button>
+        </div>
     </div>
 
     <div id="bonus-banner">
@@ -186,7 +228,9 @@
     </div>
 
     <script>
-        let gameData = { score: 0, clickPower: 1, autoIncome: 0 };
+        let gameData = {
+            score: 0, clickPower: 1, autoIncome: 0, rank: 0, gachaMultiplier: 1.0
+        };
         let isMuted = false;
         let bgmStarted = false;
 
@@ -194,13 +238,14 @@
         const SE_VOLUME = 0.3;
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
-        const SAVE_KEY = 'yaju_clicker_save_v2'; 
+        const SAVE_KEY = 'yaju_clicker_save_v3'; 
+        const GACHA_COST = 100000;
+        const REBIRTH_COST = 1000000;
 
         const bgm = document.getElementById('bgm');
         const bonusBgm = document.getElementById('bonus-bgm');
         bgm.volume = BGM_VOLUME;
         bonusBgm.volume = BGM_VOLUME;
-
         const tapSoundUrl = "tap.mp3";
         const buySoundUrl = "buy.mp3";
 
@@ -221,15 +266,20 @@
             { name: "野獣の眼光", type: "auto", baseCost: 8101919, power: 5000, count: 0 }
         ];
 
+        function getGlobalMultiplier() {
+            return (1 + gameData.rank * 0.5) * gameData.gachaMultiplier;
+        }
+
         function saveGame() {
             const saveObj = {
                 score: gameData.score,
                 clickPower: gameData.clickPower,
                 autoIncome: gameData.autoIncome,
+                rank: gameData.rank,
+                gachaMultiplier: gameData.gachaMultiplier,
                 itemCounts: items.map(item => item.count)
             };
             localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
-            
             const notice = document.getElementById('save-notice');
             notice.style.opacity = 1;
             setTimeout(() => notice.style.opacity = 0, 1000);
@@ -243,6 +293,8 @@
                     gameData.score = parsed.score || 0;
                     gameData.clickPower = parsed.clickPower || 1;
                     gameData.autoIncome = parsed.autoIncome || 0;
+                    gameData.rank = parsed.rank || 0;
+                    gameData.gachaMultiplier = parsed.gachaMultiplier || 1.0;
                     if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
                         parsed.itemCounts.forEach((count, index) => {
                             if (items[index]) items[index].count = count;
@@ -253,13 +305,47 @@
         }
 
         function resetGame() {
-            if(confirm("データを削除してリセットしますか？")) {
+            if(confirm("全てのデータを削除して初期化しますか？")) {
                 localStorage.removeItem(SAVE_KEY);
                 location.reload();
             }
         }
 
-        // --- ここでリスト表示をわかりやすく変更 ---
+        function pullGacha() {
+            if (gameData.score < GACHA_COST) {
+                alert(`金が足りないよなぁ？ (必要: ${GACHA_COST.toLocaleString()} YJ)`);
+                return;
+            }
+            if (!confirm(`10万YJを使ってガチャを回しますか？\n現在のガチャ倍率: x${gameData.gachaMultiplier.toFixed(2)}`)) return;
+            gameData.score -= GACHA_COST;
+            playSound(buySoundUrl);
+            const rand = Math.random();
+            let msg = ""; let boost = 0;
+            if (rand < 0.05) { boost = 2.0; msg = "【超激レア】神の啓示！倍率+200%！"; playSound(buySoundUrl); }
+            else if (rand < 0.20) { boost = 0.5; msg = "【大当たり】王者の風格！倍率+50%！"; }
+            else if (rand < 0.70) { boost = 0.1; msg = "【当たり】いい肥料。倍率+10%"; }
+            else { boost = 0; msg = "【ハズレ】ただのゴミ。効果なし。"; }
+            gameData.gachaMultiplier += boost;
+            alert(msg);
+            saveGame();
+            updateDisplay();
+        }
+
+        function doRebirth() {
+            if (gameData.score < REBIRTH_COST) return;
+            if (confirm(`【転生確認】\nお金とアイテムを全てリセットして「転生」しますか？\n\n・野獣ランクが 1 上がります\n・全ての収入がさらに 1.5倍 になります\n・ガチャ倍率は引き継がれます`)) {
+                gameData.score = 0;
+                gameData.clickPower = 1;
+                gameData.autoIncome = 0;
+                items.forEach(i => i.count = 0);
+                gameData.rank++;
+                playSound(buySoundUrl);
+                alert(`転生完了！\n野獣ランクが ${gameData.rank} になりました！`);
+                saveGame();
+                location.reload();
+            }
+        }
+
         function initShop() {
             const container = document.getElementById('shop-items');
             container.innerHTML = '';
@@ -268,22 +354,12 @@
                 div.className = 'item';
                 div.id = `item-${index}`;
                 div.onclick = () => buyItem(index);
-                
-                // タイプによって表示を変える
-                let typeLabel = "";
-                let typeClass = "";
-                if (item.type === 'click') {
-                    typeLabel = `👆 タップで +${item.power}`;
-                    typeClass = "effect-click";
-                } else {
-                    typeLabel = `⏱️ 毎秒 +${item.power}`;
-                    typeClass = "effect-auto";
-                }
-
+                let typeLabel = item.type === 'click' ? `👆 タップ +${item.power}` : `⏱️ 毎秒 +${item.power}`;
+                let typeClass = item.type === 'click' ? "effect-click" : "effect-auto";
                 div.innerHTML = `
                     <div>
                         <div class="item-name">${item.name}</div>
-                        <span class="item-effect ${typeClass}">${typeLabel}</span>
+                        <span class="item-effect ${typeClass}">${typeLabel} (基礎)</span>
                         <div class="item-cost">価格: <span id="cost-${index}">${item.baseCost}</span></div>
                     </div>
                     <div class="item-count" id="count-${index}">0</div>
@@ -294,12 +370,24 @@
 
         function updateDisplay() {
             document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
-            let currentSps = isBonusActive ? gameData.autoIncome * 5 : gameData.autoIncome;
+            const mult = getGlobalMultiplier();
+            let finalAuto = gameData.autoIncome * mult;
+            if (isBonusActive) finalAuto *= 5;
             let spsEl = document.getElementById('sps');
-            spsEl.innerText = currentSps.toLocaleString();
+            spsEl.innerText = Math.floor(finalAuto).toLocaleString();
             spsEl.style.color = isBonusActive ? '#ff0000' : '#fff';
             document.getElementById('next-bonus-time').innerText = nextBonusTimer;
-
+            document.getElementById('rank-display').innerText = gameData.rank;
+            document.getElementById('rank-mult-display').innerText = (1 + gameData.rank * 0.5).toFixed(1);
+            document.getElementById('gacha-mult-display').innerText = gameData.gachaMultiplier.toFixed(2);
+            const rbBtn = document.getElementById('rebirth-btn');
+            if (gameData.score >= REBIRTH_COST) {
+                rbBtn.classList.remove('locked');
+                rbBtn.innerText = "🔄 転生可能！";
+            } else {
+                rbBtn.classList.add('locked');
+                rbBtn.innerText = `転生まであと ${(REBIRTH_COST - gameData.score).toLocaleString()} YJ`;
+            }
             items.forEach((item, index) => {
                 const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
                 document.getElementById(`cost-${index}`).innerText = cost.toLocaleString();
@@ -323,12 +411,12 @@
             if (isMuted) {
                 bgm.pause();
                 bonusBgm.pause();
-                btn.innerText = "🔇 音量OFF";
+                btn.innerText = "🔇 音OFF";
                 btn.style.background = "#800";
             } else {
                 if (isBonusActive) bonusBgm.play().catch(()=>{});
                 else if (bgmStarted) bgm.play().catch(()=>{});
-                btn.innerText = "🔊 音量ON";
+                btn.innerText = "🔊 音ON";
                 btn.style.background = "#555";
             }
         }
@@ -376,11 +464,18 @@
                 if (!isMuted) bgm.play().catch(e => {});
             }
             playSound(tapSoundUrl);
-            let power = gameData.clickPower;
+
+            // 画面シェイク実行
+            document.body.classList.add('shaking');
+            setTimeout(() => document.body.classList.remove('shaking'), 200);
+
+            let power = gameData.clickPower * getGlobalMultiplier();
             if (isBonusActive) power *= 5;
             gameData.score += power;
-            spawnFloatingText(event.clientX, event.clientY, "+" + power, isBonusActive);
-            spawnPopYaju(event.clientX, event.clientY);
+            spawnFloatingText(event.clientX, event.clientY, "+" + Math.floor(power).toLocaleString(), isBonusActive);
+            
+            // 粒子爆発実行
+            spawnParticles(event.clientX, event.clientY);
             updateDisplay();
         }
 
@@ -415,17 +510,27 @@
             setTimeout(() => el.remove(), 800);
         }
 
-        function spawnPopYaju(x, y) {
-            const img = document.createElement('img');
-            img.src = '野獣.png'; 
-            img.className = 'pop-yaju';
-            const size = 30 + Math.random() * 50; 
-            img.style.width = size + 'px';
-            img.style.height = size + 'px';
-            img.style.left = x + 'px';
-            img.style.top = y + 'px';
-            document.body.appendChild(img);
-            setTimeout(() => img.remove(), 1000);
+        // 新しい粒子爆発エフェクト
+        function spawnParticles(x, y) {
+            const count = isBonusActive ? 15 : 8; // ボーナス時は粒子増量
+            for (let i = 0; i < count; i++) {
+                const img = document.createElement('img');
+                img.src = '野獣.png';
+                img.className = 'pop-particle';
+                img.style.left = x + 'px';
+                img.style.top = y + 'px';
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 100 + Math.random() * 150;
+                const destX = x + Math.cos(angle) * distance;
+                const destY = y + Math.sin(angle) * distance - 100;
+                const rotate = Math.random() * 720 - 360;
+                document.body.appendChild(img);
+                setTimeout(() => {
+                    img.style.transform = `translate(${destX - x}px, ${destY - y}px) rotate(${rotate}deg) scale(0)`;
+                    img.style.opacity = 0;
+                }, 10);
+                setTimeout(() => img.remove(), 800);
+            }
         }
 
         function spawnFallingYaju() {
@@ -446,11 +551,11 @@
 
         setInterval(() => {
             if (gameData.autoIncome > 0) {
-                let income = gameData.autoIncome;
+                let income = gameData.autoIncome * getGlobalMultiplier();
                 if (isBonusActive) income *= 5;
                 gameData.score += income / 10;
                 updateDisplay();
-                let chance = Math.min(gameData.autoIncome / 500, 0.5);
+                let chance = Math.min(income / 500, 0.5);
                 if (isBonusActive) chance += 0.3;
                 if (Math.random() < chance + 0.05) spawnFallingYaju();
             }
