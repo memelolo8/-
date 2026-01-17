@@ -3,129 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>野獣クリッカー：音声修正版 (v17)</title>
+    <title>野獣クリッカー：完全復活版 (v17)</title>
     <style>
-        /* --- 基本設定 --- */
+        /* --- ベース設定 --- */
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             background-color: #1a1a1a;
-            color: #eee;
-            margin: 0; padding: 0; height: 100vh; width: 100vw;
-            overflow: hidden; display: flex; flex-direction: column;
-            user-select: none; -webkit-user-select: none;
-        }
-
-        /* --- スタート画面 (音声対策) --- */
-        #start-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 9999;
+            color: #fff;
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            overflow: hidden;
             display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            cursor: pointer;
+            user-select: none; -webkit-user-select: none;
+            touch-action: manipulation;
         }
-        #start-screen h1 { color: #ffcc00; font-size: 2em; margin-bottom: 20px; }
-        #start-screen p { color: #fff; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
 
-        /* --- レイアウト --- */
-        #game-container { display: flex; flex: 1; height: 100%; overflow: hidden; }
+        /* --- エフェクトレイヤー --- */
+        #effect-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5; overflow: hidden;
+        }
+
+        /* --- メインレイアウト --- */
+        #game-container { display: flex; flex: 1; height: 100%; z-index: 10; }
+        
         #main-panel {
-            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            position: relative; background: radial-gradient(circle, #333 0%, #111 100%); border-right: 2px solid #444;
+            flex: 1;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            position: relative;
+            background: radial-gradient(circle, #333 0%, #000 100%);
+            border-right: 2px solid #444;
         }
+
         #shop-panel {
-            flex: 1; max-width: 450px; background-color: #222; display: flex; flex-direction: column; border-left: 1px solid #000;
+            flex: 1; max-width: 450px; background-color: #222;
+            display: flex; flex-direction: column; border-left: 2px solid #000;
+            z-index: 20;
         }
+
         @media (max-width: 768px) {
             #game-container { flex-direction: column; }
             #main-panel { flex: 0.8; border-right: none; border-bottom: 2px solid #444; }
-            #shop-panel { flex: 1.2; max-width: 100%; border-left: none; }
+            #shop-panel { flex: 1.2; max-width: 100%; }
             .click-area { width: 180px !important; height: 180px !important; }
         }
 
-        /* ヘッダー */
+        /* --- ヘッダー情報 --- */
         .stats-bar {
-            width: 100%; padding: 10px; background: rgba(0,0,0,0.6);
-            display: flex; justify-content: space-around; position: absolute; top: 0; z-index: 100;
-            font-size: 0.9em; box-sizing: border-box;
+            width: 100%; padding: 8px; background: rgba(0,0,0,0.8);
+            display: flex; justify-content: space-around;
+            position: absolute; top: 0; z-index: 50;
+            font-size: 0.9em; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
         }
         .stat-group { text-align: center; }
         .stat-label { font-size: 0.7em; color: #aaa; display: block; }
-        .stat-val { font-weight: bold; font-size: 1.1em; color: #fff; }
+        .stat-val { font-weight: bold; font-size: 1.1em; text-shadow: 1px 1px 0 #000; }
         .val-gold { color: #ffcc00; } .val-dia { color: #00ffff; } .val-mult { color: #ff5555; }
 
-        /* クリックエリア */
+        /* --- クリックエリア & アニメーション --- */
         .click-area {
-            width: 250px; height: 250px; border-radius: 50%; border: 8px solid #ffcc00;
-            box-shadow: 0 0 30px rgba(255, 204, 0, 0.3); cursor: pointer; transition: transform 0.05s;
-            position: relative; z-index: 10; background: #fff; overflow: hidden;
+            width: 260px; height: 260px;
+            border-radius: 50%;
+            border: 8px solid #ffcc00;
+            box-shadow: 0 0 50px rgba(255, 204, 0, 0.2);
+            cursor: pointer; position: relative; z-index: 30;
+            background: #fff; overflow: hidden;
+            transition: transform 0.05s;
         }
         .click-area:active { transform: scale(0.95); }
-        .click-area img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
         
+        .click-area img {
+            width: 100%; height: 100%; object-fit: cover;
+            pointer-events: none;
+        }
+
+        /* 回転アニメ */
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .spin-slow { animation: spin 20s linear infinite; }
         .spin-fast { animation: spin 2s linear infinite; }
-        
-        @keyframes flash { 0% { filter: brightness(1); } 50% { filter: brightness(2); } 100% { filter: brightness(1); } }
-        .flash-anim { animation: flash 0.1s; }
 
-        /* ショップ */
+        /* 振動アニメ */
+        @keyframes shake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(-5px, 5px) rotate(-5deg); }
+            50% { transform: translate(5px, -5px) rotate(5deg); }
+            75% { transform: translate(-5px, -5px) rotate(-5deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+        .shaking { animation: shake 0.2s ease-in-out; }
+
+        /* --- パーティクル --- */
+        .pop-particle {
+            position: absolute; pointer-events: none;
+            width: 40px; height: 40px; border-radius: 50%; z-index: 100;
+            transition: all 0.8s ease-out; opacity: 1;
+        }
+        .falling-yaju {
+            position: absolute; top: -100px; pointer-events: none;
+            opacity: 0.6; z-index: 1;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(110vh) rotate(360deg); }
+        }
+        .floating-text {
+            position: absolute; pointer-events: none; font-weight: bold; font-size: 1.8em;
+            color: #fff; text-shadow: 2px 2px 0 #000;
+            animation: floatUp 0.8s ease-out forwards; z-index: 200;
+        }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.5); } }
+
+        /* --- ボーナスモード --- */
+        body.bonus-mode #main-panel { animation: rainbow-bg 0.5s infinite alternate; }
+        @keyframes rainbow-bg {
+            0% { background: #500; } 50% { background: #050; } 100% { background: #005; }
+        }
+        #bonus-banner {
+            display: none; position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
+            z-index: 100; pointer-events: none; text-align: center;
+        }
+        #bonus-text {
+            font-size: 4em; font-weight: 900; color: #ff0000;
+            text-shadow: 0 0 10px #fff, 0 0 20px #ff00de;
+            animation: pulse 0.2s infinite alternate;
+        }
+        @keyframes pulse { to { transform: scale(1.1); } }
+
+        /* --- ショップ --- */
         .shop-header {
             padding: 15px; background: #333; color: #fff; font-weight: bold;
             display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #555;
         }
         .shop-content { flex: 1; overflow-y: auto; padding: 10px; }
         .shop-item {
-            background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 10px; margin-bottom: 8px;
-            display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.1s;
+            background: #2a2a2a; border: 1px solid #444; border-radius: 8px;
+            padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer; transition: all 0.1s;
         }
-        .shop-item:hover { background: #353535; }
-        .shop-item:active { background: #444; transform: translateY(1px); }
+        .shop-item:active { transform: scale(0.98); background: #444; }
         .shop-item.disabled { opacity: 0.5; pointer-events: none; background: #111; }
+        
         .item-info { display: flex; flex-direction: column; text-align: left; }
-        .item-name { font-weight: bold; font-size: 1em; color: #fff; }
+        .item-name { font-weight: bold; font-size: 1em; }
         .item-power { font-size: 0.8em; color: #88ff88; }
         .item-cost { font-size: 0.9em; font-weight: bold; color: #ffcc00; }
         .item-count-box {
-            background: #111; padding: 5px 10px; border-radius: 5px; font-size: 1.2em; font-weight: bold;
-            color: #fff; border: 1px solid #555; min-width: 40px; text-align: center;
+            background: #111; padding: 5px 10px; border-radius: 5px;
+            font-size: 1.2em; font-weight: bold; color: #fff; border: 1px solid #555;
+            min-width: 40px; text-align: center;
         }
 
-        /* ボタン */
+        /* --- ボタン群 --- */
         .menu-buttons {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; z-index: 20; width: 90%; justify-content: center; flex-wrap: wrap;
+            position: absolute; bottom: 20px; left: 0; width: 100%;
+            display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; z-index: 40; pointer-events: auto;
         }
         .btn {
-            background: #444; color: #fff; border: 1px solid #666; padding: 8px 16px; border-radius: 20px;
-            cursor: pointer; font-size: 0.9em; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            background: #444; color: #fff; border: 1px solid #777;
+            padding: 8px 12px; border-radius: 5px; cursor: pointer;
+            font-size: 0.85em; font-weight: bold;
+            box-shadow: 0 4px 0 #222; transition: transform 0.1s;
         }
-        .btn:active { transform: translateY(2px); }
-        .btn-gacha { background: linear-gradient(45deg, #003366, #0066cc); border-color: #0088ff; }
-        .btn-battle { background: linear-gradient(45deg, #660000, #cc0000); border-color: #ff4444; }
-        .btn-rebirth { background: linear-gradient(45deg, #330066, #6600cc); border-color: #8844ff; }
+        .btn:active { transform: translateY(4px); box-shadow: 0 0 0 #222; }
+        .btn-gacha { background: #0055aa; border-color: #0088ff; }
+        .btn-battle { background: #aa0000; border-color: #ff4444; }
+        .btn-rebirth { background: #5500aa; border-color: #8844ff; }
+        .btn-ach { background: #aa8800; border-color: #ffcc00; color: #000; }
 
-        /* エフェクト */
-        .floating-text {
-            position: absolute; pointer-events: none; font-weight: bold; font-size: 1.5em; color: #fff;
-            text-shadow: 1px 1px 0 #000; animation: floatUp 0.8s ease-out forwards; z-index: 1000;
-        }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-50px); } }
-
-        /* ボスUI */
-        #boss-overlay {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(50, 0, 0, 0.8); z-index: 50; flex-direction: column;
-            justify-content: center; align-items: center; pointer-events: none;
-        }
-        #boss-overlay.active { display: flex; }
-        .boss-hp-bar {
-            width: 80%; height: 20px; background: #333; border: 2px solid #fff; margin-top: 10px; position: relative; overflow: hidden;
-        }
-        .boss-hp-fill { height: 100%; background: #ff0000; width: 100%; transition: width 0.1s; }
-
-        /* モーダル */
+        /* --- モーダル & ポップアップ --- */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;
@@ -135,24 +182,60 @@
             background: #222; border: 2px solid #555; padding: 20px; border-radius: 10px;
             width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto; color: #fff;
         }
-        .stat-row { display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding: 5px 0; }
-        
-        @keyframes buy-flash {
-            0% { background-color: #fff; transform: scale(1.05); }
-            100% { background-color: rgba(68, 68, 68, 0.8); transform: scale(1); }
+        .list-item {
+            background: #333; margin-bottom: 5px; padding: 8px; border-radius: 5px;
+            display: flex; align-items: center; gap: 10px; border: 1px solid #444;
         }
-        .bought { animation: buy-flash 0.3s ease-out; }
+        .list-item.locked { opacity: 0.5; filter: grayscale(1); }
+        .list-icon { font-size: 1.5em; }
+        
+        .notification {
+            position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 100, 255, 0.9); color: white;
+            padding: 10px 20px; border-radius: 20px; border: 2px solid #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 3000; transition: top 0.5s;
+            display: flex; align-items: center; gap: 10px; pointer-events: none;
+        }
+        .notification.show { top: 20px; }
+
+        /* ボスUI */
+        #boss-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(50, 0, 0, 0.8); z-index: 60; flex-direction: column;
+            justify-content: center; align-items: center; pointer-events: none;
+        }
+        #boss-overlay.active { display: flex; }
+        .boss-hp-bar { width: 80%; height: 20px; background: #333; border: 2px solid #fff; margin: 10px 0; position: relative; }
+        .boss-hp-fill { height: 100%; background: #ff0000; width: 100%; transition: width 0.1s; }
+
+        /* スタート画面 */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <div id="start-screen" onclick="startGame()">
-        <h1>野獣クリッカー</h1>
-        <p>TAP TO START</p>
-        <div style="margin-top:20px; font-size:0.8em; color:#aaa;">(音が出ます)</div>
+        <h1 style="color:#ffcc00;">野獣クリッカー</h1>
+        <p style="color:#fff; animation:pulse 1s infinite;">TAP TO START</p>
+    </div>
+
+    <div id="notification" class="notification">
+        <div style="font-size:2em;">🏆</div>
+        <div>
+            <div style="font-weight:bold; color:#ffcc00;" id="notify-title">実績解除！</div>
+            <div style="font-size:0.8em;" id="notify-desc">詳細</div>
+        </div>
     </div>
 
     <audio id="bgm" src="bgm.mp3" loop></audio>
+
+    <div id="effect-layer"></div>
+
     <div id="game-container">
         <div id="main-panel">
             <div class="stats-bar">
@@ -162,11 +245,17 @@
                 <div class="stat-group"><span class="stat-label">倍率</span><span id="mult-display" class="stat-val val-mult">x1.0</span></div>
             </div>
 
+            <div id="bonus-banner">
+                <div id="bonus-text">FEVER!!</div>
+                <div id="bonus-timer" style="color:#fff; font-weight:bold; font-size:1.5em;">10.0s</div>
+            </div>
+
             <div id="boss-overlay">
-                <h2 style="color:#ff5555; text-shadow:2px 2px #000;">BOSS BATTLE</h2>
-                <div style="font-size:1.5em; font-weight:bold;" id="boss-timer">30.00</div>
+                <h2 style="color:#ff5555; text-shadow:2px 2px 0 #000; margin:0;">BOSS BATTLE</h2>
+                <div style="font-size:1.5em; font-weight:bold; color:#fff;" id="boss-name">野獣の影</div>
                 <div class="boss-hp-bar"><div id="boss-hp-fill" class="boss-hp-fill"></div></div>
-                <div id="boss-hp-text">100 / 100</div>
+                <div id="boss-hp-text" style="color:#fff; font-weight:bold;">100 / 100</div>
+                <div id="boss-timer" style="color:#ffaaaa; font-size:1.2em; margin-top:5px;">30.00</div>
             </div>
 
             <div class="click-area" onclick="handleClick(event)">
@@ -175,16 +264,18 @@
 
             <div class="menu-buttons">
                 <button class="btn" id="mute-btn" onclick="toggleMute()">🎵 音ON</button>
-                <button class="btn" onclick="showStats()">📊 詳細</button>
-                <button class="btn btn-gacha" onclick="pullGacha()">📦 ガチャ</button>
-                <button class="btn btn-battle" onclick="toggleBattle()">⚔️ 討伐</button>
+                <button class="btn btn-ach" onclick="showAchievements()">🏆 実績</button>
+                <button class="btn btn-gacha" id="gacha-btn" onclick="pullGacha()">📦 ガチャ</button>
+                <button class="btn btn-battle" onclick="toggleBattle()">⚔️ ダンジョン</button>
                 <button class="btn btn-rebirth" onclick="doRebirth()">🔄 転生</button>
+                <button class="btn" onclick="resetGame()">🗑️</button>
             </div>
         </div>
 
         <div id="shop-panel">
             <div class="shop-header">
-                <span>ショップ</span><span style="font-size:0.8em; color:#aaa;">生産力強化</span>
+                <span>ショップ</span>
+                <span style="font-size:0.8em; color:#aaa;">生産力強化</span>
             </div>
             <div id="shop-list" class="shop-content"></div>
         </div>
@@ -192,8 +283,8 @@
 
     <div id="common-modal" class="modal">
         <div class="modal-box">
-            <h3 id="modal-title">タイトル</h3>
-            <div id="modal-body">内容</div>
+            <h3 id="modal-title" style="margin-top:0; border-bottom:1px solid #555; padding-bottom:10px;">タイトル</h3>
+            <div id="modal-body"></div>
             <div style="text-align:center; margin-top:20px;">
                 <button class="btn" onclick="document.getElementById('common-modal').classList.remove('open')">閉じる</button>
             </div>
@@ -201,11 +292,11 @@
     </div>
 
     <script>
-        // --- 1. ゲームデータ ---
+        /* --- 1. ゲームデータ設定 --- */
         const SAVE_KEY = 'yaju_clicker_v17';
         let game = {
             score: 0, diamonds: 0, rank: 0, gachaMult: 1.0, bossKills: 0,
-            floor: 1, maxFloor: 1, itemCounts: [], artifacts: []
+            floor: 1, maxFloor: 1, itemCounts: [], achievements: [], gachaCount: 0
         };
 
         const items = [
@@ -227,19 +318,33 @@
             { name: "全知全能", type: "auto", baseCost: 810000000000000000, power: 10000000000000 }
         ];
 
+        const achievementList = [
+            { id: "click_1", name: "初投稿", desc: "初めてクリックする", condition: () => game.score > 0 },
+            { id: "score_114514", name: "いいよ！来いよ！", desc: "114,514 YJ 貯める", condition: () => game.score >= 114514 },
+            { id: "rebirth_1", name: "生き返れ生き返れ", desc: "初めて転生する", condition: () => game.rank >= 1 },
+            { id: "floor_10", name: "ダンジョン探索者", desc: "10階到達", condition: () => game.maxFloor >= 10 },
+            { id: "boss_10", name: "野獣ハンター", desc: "ボス10体討伐", condition: () => game.bossKills >= 10 },
+            { id: "item_last", name: "完走した感想", desc: "最後のアイテム購入", condition: () => game.itemCounts[items.length-1] > 0 }
+        ];
+
         while (game.itemCounts.length < items.length) game.itemCounts.push(0);
 
         let isBossBattle = false;
         let bossData = { max: 100, current: 100, time: 30 };
         let isMuted = false;
-        let isGameStarted = false; // 音声再生許可フラグ
+        let isGameStarted = false;
+        
+        let bonusTimer = 0;
+        let nextBonusTimer = 60;
+        let isBonusActive = false;
 
-        // --- 2. 計算 ---
+        /* --- 2. 計算関数 --- */
         function getGlobalMult() {
             let m = 1;
             m *= (1 + game.rank * 0.1); 
-            m *= game.gachaMult;        
-            m *= (1 + game.bossKills * 0.02); 
+            m *= game.gachaMult;
+            m *= (1 + game.bossKills * 0.02);
+            m *= (1 + game.achievements.length * 0.05); // 実績ボーナス復活
             return m;
         }
 
@@ -264,78 +369,57 @@
             return Math.floor(items[index].baseCost * Math.pow(1.15, count));
         }
 
-        // --- 3. アクション ---
-        // ゲーム開始（音声ロック解除）
+        /* --- 3. アクション --- */
         function startGame() {
             isGameStarted = true;
             document.getElementById('start-screen').style.display = 'none';
-            if(!isMuted) {
-                document.getElementById('bgm').play().catch(e => console.log("BGM Play Error:", e));
-            }
+            if(!isMuted) document.getElementById('bgm').play().catch(()=>{});
         }
 
-        // 音声再生（修正版：連打対応）
         function playSE(type) {
             if (isMuted || !isGameStarted) return;
-            // 毎回新しいAudioオブジェクトを作って鳴らす（重ねて再生できる）
             const audio = new Audio(type + '.mp3'); 
             audio.volume = 0.5;
             audio.play().catch(()=>{});
         }
 
         function handleClick(e) {
-            playSE('tap'); // 修正：tap.mp3を再生
+            playSE('tap');
+            
+            // アイコンアニメーション復活
             const icon = document.getElementById('main-icon');
-            icon.classList.remove('flash-anim');
-            void icon.offsetWidth; 
-            icon.classList.add('flash-anim');
+            const area = document.querySelector('.click-area');
+            area.classList.remove('shaking');
+            void area.offsetWidth; 
+            area.classList.add('shaking');
 
             let stats = getRealStats();
-            let dmg = stats.click;
+            let power = stats.click;
+            if (isBonusActive) power *= 5;
 
             if (isBossBattle) {
-                bossData.current -= dmg;
-                spawnText(e.clientX, e.clientY, `-${formatNum(dmg)}`, '#ff5555');
+                bossData.current -= power;
+                spawnText(e.clientX, e.clientY, `Damage ${formatNum(power)}`, '#ff5555');
                 if (bossData.current <= 0) winBattle();
             } else {
-                game.score += dmg;
-                spawnText(e.clientX, e.clientY, `+${formatNum(dmg)}`, '#fff');
+                game.score += power;
+                spawnText(e.clientX, e.clientY, `+${formatNum(power)}`, '#fff');
             }
+            
+            spawnParticles(e.clientX, e.clientY); // 粒子エフェクト復活
+            checkAchievements();
             updateUI();
         }
 
         function buyItem(index) {
             let cost = getItemCost(index);
             if (game.score >= cost) {
-                playSE('buy'); // 修正：buy.mp3を再生
+                playSE('buy');
                 game.score -= cost;
                 game.itemCounts[index]++;
-                
-                // 購入エフェクト
-                const row = document.getElementById(`shop-item-${index}`);
-                if(row) {
-                    row.classList.add('bought');
-                    setTimeout(()=>row.classList.remove('bought'), 300);
-                }
-                
                 updateUI();
                 saveGame();
             }
-        }
-
-        function pullGacha() {
-            let cost = 10;
-            if (game.diamonds < cost) return alert("ダイヤが足りません (10個必要)");
-            game.diamonds -= cost;
-            playSE('buy');
-            
-            let rand = Math.random();
-            let boost = 0; let msg = "";
-            if (rand < 0.05) { boost = 0.5; msg = "【超激レア】倍率+50%！"; }
-            else if (rand < 0.20) { boost = 0.2; msg = "【大当たり】倍率+20%！"; }
-            else { boost = 0.05; msg = "【当たり】倍率+5%"; }
-            game.gachaMult += boost;
-            alert(msg); saveGame(); updateUI();
         }
 
         function toggleBattle() {
@@ -348,6 +432,7 @@
                 bossData.current = bossData.max;
                 bossData.time = 30;
                 document.getElementById('boss-overlay').classList.add('active');
+                document.getElementById('boss-name').innerText = `BOSS: 野獣の影 ${game.floor}F`;
             }
             updateUI();
         }
@@ -360,20 +445,160 @@
             if (game.floor > game.maxFloor) game.maxFloor = game.floor;
             let reward = bossData.max * 0.1;
             game.score += reward;
-            alert(`討伐成功！\n報酬: ${formatNum(reward)} YJ\n次の階層へ進みます。`);
+            alert(`討伐成功！\n報酬: ${formatNum(reward)} YJ`);
             saveGame(); updateUI();
+        }
+
+        function pullGacha() {
+            if (game.diamonds < 10) return alert("ダイヤが足りません(10個)");
+            if(!confirm("10ダイヤでガチャを回しますか？")) return;
+            game.diamonds -= 10;
+            game.gachaCount++;
+            playSE('buy');
+            
+            let rand = Math.random();
+            let boost = (rand < 0.05) ? 0.5 : (rand < 0.2) ? 0.2 : 0.05;
+            let msg = (rand < 0.05) ? "【超激レア】+50%" : (rand < 0.2) ? "【大当たり】+20%" : "【当たり】+5%";
+            game.gachaMult += boost;
+            alert(msg); saveGame(); updateUI();
         }
 
         function doRebirth() {
             let req = 1000000 * Math.pow(10, game.rank);
-            if (game.score < req) return alert(`転生には ${formatNum(req)} YJ 必要です`);
+            if (game.score < req) return alert(`必要: ${formatNum(req)} YJ`);
             let dia = (game.rank + 1) * 10;
-            if(confirm(`転生しますか？\n・ランク +1\n・ダイヤ +${dia}\n・お金とアイテムリセット`)) {
+            if(confirm(`転生しますか？\nランク+1, ダイヤ+${dia}`)) {
                 game.score = 0;
                 game.itemCounts = game.itemCounts.map(() => 0);
                 game.rank++; game.diamonds += dia; game.floor = 1;
                 saveGame(); location.reload();
             }
+        }
+
+        /* --- 4. 演出・UI --- */
+        function formatNum(n) { return Math.floor(n).toLocaleString(); }
+
+        function spawnText(x, y, text, color) {
+            let el = document.createElement('div');
+            el.className = 'floating-text'; el.innerText = text; el.style.color = color;
+            el.style.left = (x + (Math.random()*40-20)) + 'px';
+            el.style.top = y + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function spawnParticles(x, y) {
+            for(let i=0; i<8; i++) {
+                let p = document.createElement('img');
+                p.src = '野獣.png'; p.className = 'pop-particle';
+                p.style.left = x + 'px'; p.style.top = y + 'px';
+                let angle = Math.random() * Math.PI * 2;
+                let speed = 50 + Math.random() * 100;
+                let tx = Math.cos(angle) * speed;
+                let ty = Math.sin(angle) * speed;
+                document.body.appendChild(p);
+                // アニメーション
+                p.animate([
+                    { transform: `translate(0,0) scale(0.5)`, opacity: 1 },
+                    { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }
+                ], { duration: 800, fill: 'forwards' });
+                setTimeout(() => p.remove(), 800);
+            }
+        }
+
+        function spawnFallingYaju() {
+            if(isBossBattle) return;
+            let el = document.createElement('img');
+            el.src = '野獣.png'; el.className = 'falling-yaju';
+            el.style.left = Math.random() * 100 + 'vw';
+            el.style.width = (30 + Math.random() * 50) + 'px';
+            document.getElementById('effect-layer').appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        function initUI() {
+            const list = document.getElementById('shop-list');
+            list.innerHTML = '';
+            items.forEach((item, i) => {
+                let div = document.createElement('div');
+                div.className = 'shop-item'; div.id = `shop-item-${i}`;
+                div.onclick = () => buyItem(i);
+                let typeColor = item.type === 'click' ? '#ffaa00' : '#00aaff';
+                div.innerHTML = `
+                    <div class="item-info">
+                        <span class="item-name">${item.name}</span>
+                        <span class="item-power" style="color:${typeColor}">+${formatNum(item.power)}</span>
+                        <span class="item-cost" id="cost-${i}">-</span>
+                    </div>
+                    <div class="item-count-box" id="count-${i}">0</div>
+                `;
+                list.appendChild(div);
+            });
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('score-display').innerText = formatNum(game.score);
+            let stats = getRealStats();
+            let finalSps = stats.auto * (isBonusActive ? 5 : 1);
+            document.getElementById('sps-display').innerText = formatNum(finalSps);
+            document.getElementById('diamond-display').innerText = formatNum(game.diamonds);
+            document.getElementById('mult-display').innerText = "x" + getGlobalMult().toFixed(2);
+
+            items.forEach((item, i) => {
+                let cost = getItemCost(i);
+                document.getElementById(`cost-${i}`).innerText = formatNum(cost) + " YJ";
+                document.getElementById(`count-${i}`).innerText = game.itemCounts[i];
+                let el = document.getElementById(`shop-item-${i}`);
+                if (game.score >= cost) el.classList.remove('disabled');
+                else el.classList.add('disabled');
+            });
+
+            if (isBossBattle) {
+                let pct = (bossData.current / bossData.max) * 100;
+                document.getElementById('boss-hp-fill').style.width = Math.max(0, pct) + "%";
+                document.getElementById('boss-hp-text').innerText = `${formatNum(Math.max(0,bossData.current))} / ${formatNum(bossData.max)}`;
+                document.getElementById('boss-timer').innerText = Math.max(0, bossData.time).toFixed(1);
+            }
+        }
+
+        /* --- 実績 --- */
+        function checkAchievements() {
+            achievementList.forEach(ach => {
+                if(!game.achievements.includes(ach.id)) {
+                    if(ach.condition()) {
+                        game.achievements.push(ach.id);
+                        showNotification(ach.name);
+                        updateUI(); saveGame();
+                    }
+                }
+            });
+        }
+
+        function showNotification(name) {
+            const el = document.getElementById('notification');
+            document.getElementById('notify-desc').innerText = name;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 3000);
+            playSE('buy');
+        }
+
+        function showAchievements() {
+            const body = document.getElementById('modal-body');
+            document.getElementById('modal-title').innerText = "実績リスト";
+            body.innerHTML = "";
+            achievementList.forEach(ach => {
+                let unlocked = game.achievements.includes(ach.id);
+                body.innerHTML += `
+                    <div class="list-item ${unlocked ? '' : 'locked'}">
+                        <div class="list-icon">🏆</div>
+                        <div>
+                            <div style="font-weight:bold; color:${unlocked ? '#ffcc00' : '#aaa'}">${ach.name}</div>
+                            <div style="font-size:0.8em; color:#aaa;">${ach.desc}</div>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('common-modal').classList.add('open');
         }
 
         function toggleMute() {
@@ -390,106 +615,65 @@
             }
         }
 
-        /* --- 4. 画面更新 --- */
-        function formatNum(n) { return Math.floor(n).toLocaleString(); }
-
-        function initUI() {
-            const list = document.getElementById('shop-list');
-            list.innerHTML = '';
-            items.forEach((item, i) => {
-                let div = document.createElement('div');
-                div.className = 'shop-item';
-                div.id = `shop-item-${i}`;
-                div.onclick = () => buyItem(i);
-                let typeColor = item.type === 'click' ? '#ffaa00' : '#00aaff';
-                let typeText = item.type === 'click' ? 'タップ力' : '秒間収入';
-                div.innerHTML = `
-                    <div class="item-info">
-                        <span class="item-name">${item.name}</span>
-                        <span class="item-power" style="color:${typeColor}">${typeText} +${formatNum(item.power)}</span>
-                        <span class="item-cost" id="cost-${i}">Loading...</span>
-                    </div>
-                    <div class="item-count-box" id="count-${i}">0</div>
-                `;
-                list.appendChild(div);
-            });
-            updateUI();
-        }
-
-        function updateUI() {
-            let stats = getRealStats();
-            document.getElementById('score-display').innerText = formatNum(game.score);
-            document.getElementById('sps-display').innerText = formatNum(stats.auto);
-            document.getElementById('diamond-display').innerText = formatNum(game.diamonds);
-            document.getElementById('mult-display').innerText = "x" + getGlobalMult().toFixed(2);
-
-            items.forEach((item, i) => {
-                let cost = getItemCost(i);
-                let elItem = document.getElementById(`shop-item-${i}`);
-                document.getElementById(`cost-${i}`).innerText = formatNum(cost) + " YJ";
-                document.getElementById(`count-${i}`).innerText = game.itemCounts[i];
-                if (game.score >= cost) elItem.classList.remove('disabled'); else elItem.classList.add('disabled');
-            });
-
-            if (isBossBattle) {
-                let pct = (bossData.current / bossData.max) * 100;
-                document.getElementById('boss-hp-fill').style.width = Math.max(0, pct) + "%";
-                document.getElementById('boss-hp-text').innerText = `${formatNum(Math.max(0,bossData.current))} / ${formatNum(bossData.max)}`;
-                document.getElementById('boss-timer').innerText = Math.max(0, bossData.time).toFixed(1);
-            }
-        }
-
-        function spawnText(x, y, text, color) {
-            let el = document.createElement('div');
-            el.className = 'floating-text'; el.innerText = text; el.style.color = color;
-            el.style.left = (x + (Math.random()*40-20)) + 'px'; el.style.top = y + 'px';
-            document.body.appendChild(el); setTimeout(() => el.remove(), 800);
-        }
-
-        function showStats() {
-            const modal = document.getElementById('common-modal');
-            const body = document.getElementById('modal-body');
-            document.getElementById('modal-title').innerText = "詳細ステータス";
-            let stats = getRealStats(); let base = getBaseStats();
-            body.innerHTML = `
-                <div class="stat-row"><span>ランク</span><span>${game.rank}</span></div>
-                <div class="stat-row"><span>ガチャ倍率</span><span>x${game.gachaMult.toFixed(2)}</span></div>
-                <div class="stat-row"><span>魂ボーナス</span><span>x${(1 + game.bossKills * 0.02).toFixed(2)}</span></div>
-                <hr>
-                <div class="stat-row"><span>基礎タップ力</span><span>${formatNum(base.cp)}</span></div>
-                <div class="stat-row"><span>基礎秒間収入</span><span>${formatNum(base.ai)}</span></div>
-                <div class="stat-row" style="color:#ffcc00"><span>最終倍率</span><span>x${getGlobalMult().toFixed(2)}</span></div>
-                <div class="stat-row"><span>階層</span><span>${game.floor}F</span></div>
-            `;
-            modal.classList.add('open');
-        }
-
-        /* --- 5. ゲームループ & セーブ --- */
+        /* --- 5. ループ --- */
         setInterval(() => {
             let stats = getRealStats();
+            
+            // ボーナス処理
+            if(isBonusActive) {
+                bonusTimer -= 0.1;
+                document.getElementById('bonus-timer').innerText = bonusTimer.toFixed(1)+"s";
+                if(bonusTimer <= 0) {
+                    isBonusActive = false;
+                    document.body.classList.remove('bonus-mode');
+                    document.getElementById('bonus-banner').style.display = 'none';
+                    document.getElementById('main-icon').classList.remove('spin-fast');
+                    document.getElementById('main-icon').classList.add('spin-slow');
+                    updateUI();
+                }
+            } else {
+                nextBonusTimer -= 0.1;
+                if(nextBonusTimer <= 0) {
+                    isBonusActive = true; bonusTimer = 10; nextBonusTimer = 60;
+                    document.body.classList.add('bonus-mode');
+                    document.getElementById('bonus-banner').style.display = 'block';
+                    document.getElementById('main-icon').classList.remove('spin-slow');
+                    document.getElementById('main-icon').classList.add('spin-fast');
+                    updateUI();
+                }
+            }
+
+            // 自動収入
             if (stats.auto > 0) {
-                let income = stats.auto / 10;
+                let income = (stats.auto * (isBonusActive ? 5 : 1)) / 10;
                 if (isBossBattle) {
                     bossData.current -= income;
-                    if (bossData.current <= 0) winBattle();
+                    if(bossData.current <= 0) winBattle();
                 } else {
                     game.score += income;
                 }
             }
+
+            // ボスタイマー
             if (isBossBattle) {
                 bossData.time -= 0.1;
-                if (bossData.time <= 0) {
+                if(bossData.time <= 0) {
                     isBossBattle = false;
                     document.getElementById('boss-overlay').classList.remove('active');
-                    alert("時間切れ...");
+                    alert("時間切れ！");
                 }
             }
+
+            // 背景演出
+            if(!isBossBattle && Math.random() < 0.05) spawnFallingYaju();
+
             updateUI();
         }, 100);
 
         setInterval(() => saveGame(), 5000);
 
         function saveGame() { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); }
+        
         function loadGame() {
             let data = localStorage.getItem(SAVE_KEY);
             if (!data) { // 旧データ引き継ぎ
@@ -498,24 +682,24 @@
             }
             if (data) {
                 try {
-                    let parsed = JSON.parse(data);
-                    if (parsed.score) game.score = parsed.score;
-                    if (parsed.rank) game.rank = parsed.rank;
-                    if (parsed.diamonds) game.diamonds = parsed.diamonds;
-                    if (parsed.itemCounts) {
-                        parsed.itemCounts.forEach((c, i) => { if (game.itemCounts[i] !== undefined) game.itemCounts[i] = c; });
+                    let p = JSON.parse(data);
+                    if(p.score) game.score = p.score;
+                    if(p.rank) game.rank = p.rank;
+                    if(p.diamonds) game.diamonds = p.diamonds;
+                    if(p.gachaMult) game.gachaMult = p.gachaMult;
+                    if(p.bossKills) game.bossKills = p.bossKills;
+                    if(p.achievements) game.achievements = p.achievements;
+                    if(p.itemCounts) {
+                        p.itemCounts.forEach((c, i) => { if(game.itemCounts[i] !== undefined) game.itemCounts[i] = c; });
                     }
-                    if (parsed.gachaMult) game.gachaMult = parsed.gachaMult;
-                    if (parsed.bossKills) game.bossKills = parsed.bossKills;
-                    if (parsed.floor) game.floor = parsed.floor;
-                } catch (e) { console.error("Save Error", e); }
+                } catch(e) {}
             }
         }
         function resetGame() {
-            if(confirm("データを完全に削除しますか？")) { localStorage.clear(); location.reload(); }
+            if(confirm("全データを削除しますか？")) { localStorage.clear(); location.reload(); }
         }
 
-        /* --- 起動 --- */
+        // 初期化
         loadGame();
         initUI();
     </script>
