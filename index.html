@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：宇宙編 (v10)</title>
+    <title>野獣クリッカー：ダイヤと転生 (v11)</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -128,6 +128,7 @@
         }
         .status-box { background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 5px; font-size: 0.8em; color: #aaa; }
         .val-highlight { color: #ffcc00; font-weight: bold; }
+        .diamond-text { color: #00ffff; font-weight: bold; text-shadow: 0 0 5px #00aaaa; }
 
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
@@ -141,7 +142,7 @@
         .btn-reset { background: #800; border-color: #a00; }
         .btn-info { background: #008888; border-color: #00aaaa; font-weight: bold; }
         .btn-art { background: #aa5500; border-color: #ffaa00; font-weight: bold; }
-        .btn-gacha { background: #0055aa; border-color: #0077ff; font-weight: bold; }
+        .btn-gacha { background: #0055aa; border-color: #00ffff; font-weight: bold; color: #00ffff; }
         .btn-battle { background: #aa0000; border-color: #ff0000; font-weight: bold; box-shadow: 0 0 10px #ff0000; animation: pulse-btn 1s infinite alternate; }
         .btn-battle:hover { background: #cc0000; }
         @keyframes pulse-btn { from { transform: scale(1); } to { transform: scale(1.05); } }
@@ -237,7 +238,8 @@
 
     <div class="status-panel">
         <div class="status-box">ボーナスまで: <span id="next-bonus-time" class="val-highlight">60.0</span> 秒</div>
-        <div class="status-box">階層: <span id="floor-display" class="val-highlight">1</span>F (最高:<span id="max-floor-display">1</span>F)</div>
+        <div class="status-box">所持ダイヤ: <span id="diamond-display" class="diamond-text">0</span> 💎</div>
+        <div class="status-box">階層: <span id="floor-display" class="val-highlight">1</span>F</div>
         <div class="status-box">合計倍率: x<span id="total-mult-display" class="val-highlight">1.00</span></div>
     </div>
 
@@ -287,13 +289,14 @@
     </div>
 
     <script>
-        // ゲームデータ v10
+        // ゲームデータ v11 (ダイヤ追加)
         let gameData = { 
             score: 0, clickPower: 1, autoIncome: 0, rank: 0, 
             gachaMultiplier: 1.0, totalClicks: 0, bossKills: 0, 
             achievements: [], itemCounts: [],
             dungeonFloor: 1, maxFloor: 1,
-            artifacts: [], gachaCount: 0 
+            artifacts: [], gachaCount: 0,
+            diamonds: 0 // 新通貨
         };
         
         let isMuted = false;
@@ -303,10 +306,10 @@
         const SE_VOLUME = 0.3;
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
-        const SAVE_KEY = 'yaju_clicker_save_v10'; 
-        const LEGACY_KEYS = ['yaju_clicker_save_v9', 'yaju_clicker_save_v8', 'yaju_clicker_save_v7', 'yaju_clicker_save_v6', 'yaju_clicker_save_v5'];
+        const SAVE_KEY = 'yaju_clicker_save_v11'; 
+        const LEGACY_KEYS = ['yaju_clicker_save_v10', 'yaju_clicker_save_v9', 'yaju_clicker_save_v8', 'yaju_clicker_save_v7'];
 
-        const GACHA_BASE_COST = 100000;
+        const GACHA_COST_DIAMOND = 10; // 1回10ダイヤ
         const REBIRTH_BASE_COST = 1000000;
 
         const bgm = document.getElementById('bgm');
@@ -326,7 +329,7 @@
         let bossCurrentHp = 0;
         let bossTimeLeft = 0;
 
-        // データ定義 (宇宙規模のインフレ追加)
+        // データ定義
         const items = [
             { name: "「こ↑こ↓」", type: "click", baseCost: 15, power: 1, count: 0 },
             { name: "柔らかい枕", type: "auto", baseCost: 50, power: 1, count: 0 },
@@ -342,12 +345,11 @@
             { name: "聖地巡礼", type: "auto", baseCost: 1000000000, power: 100000, count: 0 },
             { name: "淫夢くん", type: "auto", baseCost: 100000000000, power: 5000000, count: 0 },
             { name: "真夏の夜の淫夢", type: "auto", baseCost: 8101145141919, power: 810191919, count: 0 },
-            // v10 新規追加 (兆〜垓クラス)
-            { name: "「ヌッ」の概念", type: "auto", baseCost: 500000000000000, power: 10000000000, count: 0 }, // 500兆
-            { name: "新・下北沢", type: "auto", baseCost: 20000000000000000, power: 500000000000, count: 0 }, // 2京
-            { name: "野獣の惑星", type: "click", baseCost: 810000000000000000, power: 10000000000000, count: 0 }, // 81京
-            { name: "銀河遠野", type: "auto", baseCost: 11450000000000000000, power: 250000000000000, count: 0 }, // 1145京
-            { name: "全知全能", type: "auto", baseCost: 810000000000000000000, power: 10000000000000000, count: 0 } // 8垓
+            { name: "「ヌッ」の概念", type: "auto", baseCost: 500000000000000, power: 10000000000, count: 0 },
+            { name: "新・下北沢", type: "auto", baseCost: 20000000000000000, power: 500000000000, count: 0 },
+            { name: "野獣の惑星", type: "click", baseCost: 810000000000000000, power: 10000000000000, count: 0 },
+            { name: "銀河遠野", type: "auto", baseCost: 11450000000000000000, power: 250000000000000, count: 0 },
+            { name: "全知全能", type: "auto", baseCost: 810000000000000000000, power: 10000000000000000, count: 0 }
         ];
 
         const artifactList = [
@@ -398,7 +400,11 @@
         }
         
         function getRebirthCost() { return REBIRTH_BASE_COST * Math.pow(10, gameData.rank); }
-        function getGachaCost() { return Math.floor(GACHA_BASE_COST * Math.pow(1.3, gameData.gachaCount)); }
+        
+        // ダイヤ獲得量計算 (次のランク * 10)
+        function getDiamondReward() {
+            return (gameData.rank + 1) * 10;
+        }
 
         // --- 判定関連 ---
         function checkAchievements() {
@@ -467,6 +473,7 @@
                 <div class="stat-row"><span class="stat-label">討伐ソウル (${gameData.bossKills}体):</span> <span class="stat-val">x${m_soul}</span></div>
                 <div class="stat-row"><span class="stat-label" style="color:#ffcc00">合計倍率:</span> <span class="stat-val" style="color:#ffcc00">x${m_total}</span></div>
                 <br>
+                <div class="stat-row"><span class="stat-label">所持ダイヤ:</span> <span class="stat-val" style="color:#00ffff">${gameData.diamonds} 💎</span></div>
                 <div class="stat-row"><span class="stat-label">総クリック数:</span> <span class="stat-val">${gameData.totalClicks.toLocaleString()} 回</span></div>
                 <div class="stat-row"><span class="stat-label">ダンジョン最高階層:</span> <span class="stat-val">${gameData.maxFloor} F</span></div>
             `;
@@ -518,30 +525,43 @@
 
         // --- ガチャ・転生 ---
         function pullGacha() {
-            const cost = getGachaCost();
-            if (gameData.score < cost) { alert(`金が足りないよなぁ？ (必要: ${cost.toLocaleString()} YJ)`); return; }
-            if (!confirm(`${cost.toLocaleString()}YJを使ってガチャを回しますか？\n現在のガチャ倍率: x${gameData.gachaMultiplier.toFixed(2)}`)) return;
-            gameData.score -= cost;
+            // ダイヤ消費に変更
+            if (gameData.diamonds < GACHA_COST_DIAMOND) { alert(`ダイヤが足りないよなぁ？ (必要: ${GACHA_COST_DIAMOND} 💎)`); return; }
+            
+            if (!confirm(`${GACHA_COST_DIAMOND}ダイヤを使ってガチャを回しますか？\n所持ダイヤ: ${gameData.diamonds}`)) return;
+            
+            gameData.diamonds -= GACHA_COST_DIAMOND;
             gameData.gachaCount++;
             playSound(buySoundUrl);
+            
             const rand = Math.random(); 
             const baseBoost = hasArt("art_gacha") ? 0.05 : 0; 
             let msg = ""; let boost = 0;
+            
             if (rand < 0.05) { boost = 0.5; msg = "【超激レア】神の啓示！倍率+50%！"; }
             else if (rand < 0.20) { boost = 0.2; msg = "【大当たり】王者の風格！倍率+20%！"; }
             else if (rand < 0.70) { boost = 0.05; msg = "【当たり】いい肥料。倍率+5%"; }
             else { boost = 0; msg = "【ハズレ】ただのゴミ。効果なし。"; }
+            
             gameData.gachaMultiplier += (boost + (boost > 0 ? baseBoost : 0));
             alert(msg); saveGame(); updateDisplay();
         }
 
         function doRebirth() {
             const cost = getRebirthCost();
+            const rewardDiamonds = getDiamondReward();
+            
             if (gameData.score < cost) return;
-            if (confirm(`【転生確認】\n必要コスト: ${cost.toLocaleString()} YJ\nリセットして転生しますか？\n・ランク+1 (倍率+10%)\n・ダンジョン階層リセット`)) {
+            
+            if (confirm(`【転生確認】\n必要コスト: ${cost.toLocaleString()} YJ\n\n転生報酬: ${rewardDiamonds} ダイヤ 💎\n\nお金とアイテムをリセットしますか？\n・ランク+1\n・ダンジョン階層リセット`)) {
                 gameData.score = 0; gameData.clickPower = 1; gameData.autoIncome = 0; items.forEach(i => i.count = 0);
-                gameData.dungeonFloor = 1; gameData.rank++; playSound(buySoundUrl); checkAchievements(); 
-                alert(`転生完了！\nランク ${gameData.rank} になりました！`);
+                gameData.dungeonFloor = 1; 
+                gameData.rank++; 
+                // ダイヤ付与
+                gameData.diamonds += rewardDiamonds;
+                
+                playSound(buySoundUrl); checkAchievements(); 
+                alert(`転生完了！\nランク ${gameData.rank} になりました！\n${rewardDiamonds} ダイヤを獲得しました！`);
                 saveGame(); location.reload();
             }
         }
@@ -646,7 +666,7 @@
                 rank: gameData.rank, gachaMultiplier: gameData.gachaMultiplier, totalClicks: gameData.totalClicks,
                 bossKills: gameData.bossKills, achievements: gameData.achievements, itemCounts: items.map(item => item.count),
                 dungeonFloor: gameData.dungeonFloor, maxFloor: gameData.maxFloor, artifacts: gameData.artifacts,
-                gachaCount: gameData.gachaCount
+                gachaCount: gameData.gachaCount, diamonds: gameData.diamonds
             };
             localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
             const notice = document.getElementById('save-notice');
@@ -670,6 +690,13 @@
                     gameData.maxFloor = parsed.maxFloor || 1;
                     gameData.artifacts = parsed.artifacts || [];
                     gameData.gachaCount = parsed.gachaCount || 0;
+                    // v11: ダイヤ初期化 (引き継ぎボーナス)
+                    if (parsed.diamonds !== undefined) {
+                        gameData.diamonds = parsed.diamonds;
+                    } else {
+                        // 過去データからの引き継ぎボーナス
+                        gameData.diamonds = gameData.rank * 10;
+                    }
                     if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
                         parsed.itemCounts.forEach((count, index) => { if (items[index]) items[index].count = count; });
                     }
@@ -706,9 +733,9 @@
             document.getElementById('floor-display').innerText = gameData.dungeonFloor;
             document.getElementById('max-floor-display').innerText = gameData.maxFloor;
             document.getElementById('total-mult-display').innerText = getGlobalMultiplier().toFixed(2);
+            document.getElementById('diamond-display').innerText = gameData.diamonds.toLocaleString();
             
-            const gachaCost = getGachaCost();
-            document.getElementById('gacha-btn').innerText = `📦 ガチャ (${(gachaCost/10000).toFixed(0)}万)`;
+            document.getElementById('gacha-btn').innerText = `📦 ガチャ (${GACHA_COST_DIAMOND}💎)`;
 
             const rbBtn = document.getElementById('rebirth-btn'); const rbCost = getRebirthCost();
             if (gameData.score >= rbCost) { rbBtn.classList.remove('locked'); rbBtn.innerText = "🔄 転生可能！"; } 
