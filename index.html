@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：完全修正版 (v12)</title>
+    <title>野獣クリッカー：完全修正版 (v13)</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -44,8 +44,6 @@
             width: 80%; max-width: 600px; z-index: 500;
         }
         body.boss-mode #boss-ui { display: block; }
-        /* ボス戦中でもスコアは見えたほうがバグ確認しやすいので表示に変更 */
-        /* body.boss-mode #score-container { display: none; } */ 
 
         .hp-bar-container {
             width: 100%; height: 30px; background: #333; border: 3px solid #fff;
@@ -290,10 +288,10 @@
     </div>
 
     <script>
-        // ゲームデータ v12 (save structure doesn't change, but logic does)
+        // ゲームデータ v13
         let gameData = { 
-            score: 0, clickPower: 1, autoIncome: 0, rank: 0, 
-            gachaMultiplier: 1.0, totalClicks: 0, bossKills: 0, 
+            score: 0, rank: 0, gachaMultiplier: 1.0, 
+            totalClicks: 0, bossKills: 0, 
             achievements: [], itemCounts: [],
             dungeonFloor: 1, maxFloor: 1,
             artifacts: [], gachaCount: 0,
@@ -307,9 +305,8 @@
         const SE_VOLUME = 0.3;
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
-        // Key is kept same to allow loading previous state
-        const SAVE_KEY = 'yaju_clicker_save_v12'; 
-        const LEGACY_KEYS = ['yaju_clicker_save_v11', 'yaju_clicker_save_v10', 'yaju_clicker_save_v9', 'yaju_clicker_save_v8', 'yaju_clicker_save_v7'];
+        const SAVE_KEY = 'yaju_clicker_save_v13'; 
+        const LEGACY_KEYS = ['yaju_clicker_save_v12', 'yaju_clicker_save_v11', 'yaju_clicker_save_v10', 'yaju_clicker_save_v9'];
 
         const GACHA_COST_DIAMOND = 10; 
         const REBIRTH_BASE_COST = 1000000;
@@ -376,10 +373,8 @@
             { id: "buy_last", name: "完走した感想", desc: "最後のアイテムを買う", condition: () => items[items.length-1].count >= 1 }
         ];
 
-        // --- コア計算ロジック（再計算システム） ---
+        // --- 計算関数 (毎回計算することでバグを防ぐ) ---
         function hasArt(id) { return gameData.artifacts.includes(id); }
-
-        // 個別倍率
         function getDiscountMultiplier() { return hasArt("art_discount") ? 0.9 : 1.0; }
         function getCritRate() { return hasArt("art_crit_rate") ? 0.1 : 0.05; }
         function getCritDamage() { return hasArt("art_crit_dmg") ? 2.5 : 2.0; }
@@ -390,213 +385,50 @@
         function getAchievementMultiplier() { return 1 + (gameData.achievements.length * 0.05); }
         function getSoulMultiplier() { return 1 + (gameData.bossKills * getSoulEffect()); }
         function getRankMultiplier() { return 1 + (gameData.rank * 0.1); }
-        function getArtifactPassiveMultiplier() {
-            let mult = 1.0;
-            if(hasArt("art_income")) mult += 0.5;
-            return mult;
-        }
+        function getArtifactPassiveMultiplier() { return hasArt("art_income") ? 1.5 : 1.0; }
 
-        // 全体倍率
         function getGlobalMultiplier() { 
-            return getRankMultiplier() * gameData.gachaMultiplier * getAchievementMultiplier() * getSoulMultiplier() * getArtifactPassiveMultiplier(); 
+            let m = getRankMultiplier() * gameData.gachaMultiplier * getAchievementMultiplier() * getSoulMultiplier() * getArtifactPassiveMultiplier(); 
+            if (isNaN(m) || m < 1) return 1;
+            return m;
         }
         
-        // 基礎力再計算（アイテム数から算出）
-        function recalcBaseStats() {
+        function getRebirthCost() { return REBIRTH_BASE_COST * Math.pow(10, gameData.rank); }
+        function getGachaCost() { return Math.floor(GACHA_COST_DIAMOND); } // 固定10ダイヤ
+
+        // 基礎ステータスをアイテム所持数から算出
+        function calculateBaseStats() {
             let cp = 1;
             let ai = 0;
             items.forEach(item => {
                 if (item.type === 'click') cp += item.power * item.count;
                 else ai += item.power * item.count;
             });
-            // 遺物による基礎力補正
             if (hasArt("art_click")) cp *= 1.5;
-            
-            // gameDataには保存せず、都度計算するか、一時変数に入れる
-            // ここでは表示用とロジック用に返す
             return { clickPower: cp, autoIncome: ai };
         }
-        
-        function getRebirthCost() { return REBIRTH_BASE_COST * Math.pow(10, gameData.rank); }
-        
-        // --- 判定関連 ---
-        function checkAchievements() {
-            let unlocked = false;
-            achievementList.forEach(ach => {
-                if (!gameData.achievements.includes(ach.id)) {
-                    if (ach.condition()) {
-                        gameData.achievements.push(ach.id);
-                        showPopup("🏆 実績解除！", ach.name, false);
-                        unlocked = true;
-                    }
-                }
-            });
-            if(unlocked) { saveGame(); updateDisplay(); }
-        }
 
-        function showPopup(title, desc, isRare) {
-            const popup = document.getElementById('notify-popup');
-            document.getElementById('notify-title').innerText = title;
-            document.getElementById('notify-desc').innerText = desc;
-            document.getElementById('notify-icon').innerText = isRare ? "🏺" : "🏆";
-            if(isRare) popup.classList.add('rare'); else popup.classList.remove('rare');
-            playSound(buySoundUrl); 
-            popup.classList.add('show');
-            setTimeout(() => { popup.classList.remove('show'); }, 4000);
-        }
-
-        // --- モーダル系 ---
-        function closeModal() { document.getElementById('common-modal').classList.remove('open'); }
-        
-        function showAchievements() {
-            const body = document.getElementById('modal-body');
-            document.getElementById('modal-title').innerText = "🏆 実績リスト (x" + getAchievementMultiplier().toFixed(2) + ")";
-            body.innerHTML = "";
-            achievementList.forEach(ach => {
-                const isUnlocked = gameData.achievements.includes(ach.id);
-                body.innerHTML += `<div class="list-item ${isUnlocked ? '' : 'locked'}"><div class="list-icon">🏆</div><div class="list-info"><div class="list-title">${ach.name}</div><div class="list-desc">${ach.desc}</div></div></div>`;
-            });
-            document.getElementById('common-modal').classList.add('open');
-        }
-
-        function showArtifacts() {
-            const body = document.getElementById('modal-body');
-            document.getElementById('modal-title').innerText = "🏺 アーティファクト";
-            body.innerHTML = "";
-            if (gameData.artifacts.length === 0) body.innerHTML = "<div style='padding:20px; text-align:center;'>まだ何も持っていません。<br>ダンジョンの深層(5階ごと)で手に入るようです...</div>";
-            artifactList.forEach(art => {
-                const has = hasArt(art.id);
-                body.innerHTML += `<div class="list-item ${has ? '' : 'locked'}"><div class="list-icon">🏺</div><div class="list-info"><div class="list-title">${art.name}</div><div class="list-desc">${art.desc}</div></div><div>${has ? '✅' : '❓'}</div></div>`;
-            });
-            document.getElementById('common-modal').classList.add('open');
-        }
-
-        function showStats() {
-            const body = document.getElementById('modal-body');
-            document.getElementById('modal-title').innerText = "📊 詳細ステータス";
-            
-            const m_rank = getRankMultiplier().toFixed(2);
-            const m_gacha = gameData.gachaMultiplier.toFixed(2);
-            const m_ach = getAchievementMultiplier().toFixed(2);
-            const m_soul = getSoulMultiplier().toFixed(2);
-            const m_art = getArtifactPassiveMultiplier().toFixed(2);
-            const m_total = getGlobalMultiplier().toFixed(2);
-            
-            // 基礎値計算
-            const stats = recalcBaseStats();
-
-            body.innerHTML = `
-                <div class="stat-row"><span class="stat-label">ランク倍率 (転生${gameData.rank}):</span> <span class="stat-val">x${m_rank}</span></div>
-                <div class="stat-row"><span class="stat-label">ガチャ倍率 (${gameData.gachaCount}回):</span> <span class="stat-val">x${m_gacha}</span></div>
-                <div class="stat-row"><span class="stat-label">実績倍率 (${gameData.achievements.length}個):</span> <span class="stat-val">x${m_ach}</span></div>
-                <div class="stat-row"><span class="stat-label">魂倍率 (${gameData.bossKills}体):</span> <span class="stat-val">x${m_soul}</span></div>
-                <div class="stat-row"><span class="stat-label">遺物倍率:</span> <span class="stat-val">x${m_art}</span></div>
-                <div class="stat-row"><span class="stat-label" style="color:#ffcc00">合計倍率:</span> <span class="stat-val" style="color:#ffcc00">x${m_total}</span></div>
-                <br>
-                <div class="stat-row"><span class="stat-label">所持ダイヤ:</span> <span class="stat-val" style="color:#00ffff">${gameData.diamonds} 💎</span></div>
-                <div class="stat-row"><span class="stat-label">基礎クリック力:</span> <span class="stat-val">${Math.floor(stats.clickPower).toLocaleString()}</span></div>
-                <div class="stat-row"><span class="stat-label">基礎秒間収入:</span> <span class="stat-val">${Math.floor(stats.autoIncome).toLocaleString()}</span></div>
-                <div class="stat-row"><span class="stat-label">総クリック数:</span> <span class="stat-val">${gameData.totalClicks.toLocaleString()} 回</span></div>
-            `;
-            document.getElementById('common-modal').classList.add('open');
-        }
-
-        // --- ボス戦 ---
-        function toggleBossBattle() {
-            if (isBossBattle) endBossBattle(false); else startBossBattle();
-        }
-        function startBossBattle() {
-            isBossBattle = true;
-            document.body.classList.add('boss-mode');
-            document.getElementById('battle-btn').innerText = "🏳️ 逃げる";
-            bossMaxHp = 1000000 * Math.pow(1.3, gameData.dungeonFloor - 1);
-            bossCurrentHp = bossMaxHp;
-            bossTimeLeft = getBossTime();
-            document.getElementById('boss-name').innerText = `Floor ${gameData.dungeonFloor}: 野獣の影`;
-            updateBossUI();
-            updateDisplay(); // 即座に更新
-        }
-        function endBossBattle(isVictory) {
-            isBossBattle = false;
-            document.body.classList.remove('boss-mode');
-            document.getElementById('battle-btn').innerText = "⚔️ ダンジョン";
-            if (isVictory) {
-                gameData.bossKills++;
-                if (gameData.dungeonFloor % 5 === 0 && Math.random() < 0.5) {
-                    const uncollected = artifactList.filter(a => !gameData.artifacts.includes(a.id));
-                    if (uncollected.length > 0) {
-                        const newArt = uncollected[Math.floor(Math.random() * uncollected.length)];
-                        gameData.artifacts.push(newArt.id);
-                        showPopup("🏺 遺物発見！", newArt.name, true);
-                    }
-                }
-                gameData.dungeonFloor++;
-                if(gameData.dungeonFloor > gameData.maxFloor) gameData.maxFloor = gameData.dungeonFloor;
-                alert(`討伐成功！\n次の階層へ進みます (Floor ${gameData.dungeonFloor})`);
-                saveGame(); checkAchievements();
-            }
-            updateDisplay();
-        }
-        function updateBossUI() {
-            if (!isBossBattle) return;
-            const hpPercent = (bossCurrentHp / bossMaxHp) * 100;
-            document.getElementById('boss-hp-bar').style.width = Math.max(0, hpPercent) + "%";
-            document.getElementById('boss-hp-text').innerText = `${Math.floor(Math.max(0, bossCurrentHp)).toLocaleString()} / ${Math.floor(bossMaxHp).toLocaleString()}`;
-            document.getElementById('boss-timer-display').innerText = `残り ${Math.max(0, bossTimeLeft).toFixed(1)} 秒`;
-        }
-
-        // --- ガチャ・転生 ---
-        function pullGacha() {
-            if (gameData.diamonds < GACHA_COST_DIAMOND) { alert(`ダイヤが足りないよなぁ？ (必要: ${GACHA_COST_DIAMOND} 💎)`); return; }
-            if (!confirm(`${GACHA_COST_DIAMOND}ダイヤを使ってガチャを回しますか？\n所持ダイヤ: ${gameData.diamonds}`)) return;
-            
-            gameData.diamonds -= GACHA_COST_DIAMOND;
-            gameData.gachaCount++;
-            playSound(buySoundUrl);
-            
-            const rand = Math.random(); 
-            const baseBoost = hasArt("art_gacha") ? 0.05 : 0; 
-            let msg = ""; let boost = 0;
-            
-            if (rand < 0.05) { boost = 0.5; msg = "【超激レア】神の啓示！倍率+50%！"; }
-            else if (rand < 0.20) { boost = 0.2; msg = "【大当たり】王者の風格！倍率+20%！"; }
-            else if (rand < 0.70) { boost = 0.05; msg = "【当たり】いい肥料。倍率+5%"; }
-            else { boost = 0; msg = "【ハズレ】ただのゴミ。効果なし。"; }
-            
-            gameData.gachaMultiplier += (boost + (boost > 0 ? baseBoost : 0));
-            alert(msg); saveGame(); updateDisplay();
-        }
-
-        function doRebirth() {
-            const cost = getRebirthCost();
-            const rewardDiamonds = (gameData.rank + 1) * 10;
-            
-            if (gameData.score < cost) return;
-            
-            if (confirm(`【転生確認】\n必要コスト: ${cost.toLocaleString()} YJ\n\n転生報酬: ${rewardDiamonds} ダイヤ 💎\n\nお金とアイテムをリセットしますか？\n・ランク+1\n・ダンジョン階層リセット`)) {
-                gameData.score = 0; 
-                // アイテムリセット
-                items.forEach(i => i.count = 0);
-                
-                gameData.dungeonFloor = 1; 
-                gameData.rank++; 
-                gameData.diamonds += rewardDiamonds;
-                
-                playSound(buySoundUrl); checkAchievements(); 
-                alert(`転生完了！\nランク ${gameData.rank} になりました！\n${rewardDiamonds} ダイヤを獲得しました！`);
-                saveGame(); location.reload();
+        // --- ゲームアクション ---
+        function buyItem(index) {
+            const item = items[index];
+            const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
+            if (gameData.score >= cost) {
+                gameData.score -= cost;
+                item.count++; // オブジェクトを直接更新
+                playSound(buySoundUrl);
+                checkAchievements();
+                updateDisplay(); 
+                saveGame();
             }
         }
 
-        // --- ループ処理 ---
         function clickYaju(event) {
             if (!bgmStarted) { bgmStarted = true; if (!isMuted) bgm.play().catch(e => {}); }
             playSound(tapSoundUrl);
             const clickArea = document.querySelector('.click-area');
             clickArea.classList.remove('shaking'); void clickArea.offsetWidth; clickArea.classList.add('shaking');
             
-            // 再計算ロジック
-            const stats = recalcBaseStats();
+            const stats = calculateBaseStats();
             let power = stats.clickPower * getGlobalMultiplier();
             if (isBonusActive) power *= 5;
 
@@ -618,24 +450,226 @@
                 gameData.score += power;
                 spawnFloatingText(event.clientX, event.clientY, "+" + Math.floor(power).toLocaleString(), isBonusActive);
             }
-            gameData.totalClicks++; spawnParticles(event.clientX, event.clientY);
-            checkAchievements(); updateDisplay();
+            gameData.totalClicks++; 
+            spawnParticles(event.clientX, event.clientY);
+            checkAchievements();
+            updateDisplay();
         }
 
-        function buyItem(index) {
-            const item = items[index];
-            const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
-            if (gameData.score >= cost) {
-                gameData.score -= cost; 
-                item.count++; // ここで増やせば recalcBaseStats で反映される
-                playSound(buySoundUrl);
-                checkAchievements(); updateDisplay(); saveGame();
+        // --- UI更新 (最重要) ---
+        function updateDisplay() {
+            // スコア更新
+            document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
+            
+            const stats = calculateBaseStats();
+            const mult = getGlobalMultiplier();
+            
+            let finalAuto = stats.autoIncome * mult;
+            if (isBonusActive) finalAuto *= 5;
+            
+            document.getElementById('sps').innerText = Math.floor(finalAuto).toLocaleString();
+            document.getElementById('sps').style.color = isBonusActive ? '#ff0000' : '#fff';
+            
+            document.getElementById('next-bonus-time').innerText = nextBonusTimer.toFixed(1);
+            document.getElementById('floor-display').innerText = gameData.dungeonFloor;
+            document.getElementById('max-floor-display').innerText = gameData.maxFloor;
+            document.getElementById('total-mult-display').innerText = mult.toFixed(2);
+            document.getElementById('diamond-display').innerText = gameData.diamonds.toLocaleString();
+            
+            document.getElementById('gacha-btn').innerText = `📦 ガチャ (${GACHA_COST_DIAMOND}💎)`;
+
+            // 転生ボタン
+            const rbBtn = document.getElementById('rebirth-btn');
+            const rbCost = getRebirthCost();
+            if (gameData.score >= rbCost) { 
+                rbBtn.classList.remove('locked'); rbBtn.innerText = "🔄 転生可能！"; 
+            } else { 
+                rbBtn.classList.add('locked'); 
+                let costText = rbCost.toLocaleString(); 
+                if(rbCost >= 100000000) costText = (rbCost/100000000).toFixed(0)+"億"; 
+                rbBtn.innerText = `転生: ${costText}YJ必要`; 
+            }
+            
+            // ショップリスト更新
+            items.forEach((item, index) => {
+                const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
+                
+                // 要素が存在するか確認してから更新
+                const costEl = document.getElementById(`cost-${index}`);
+                const countEl = document.getElementById(`count-${index}`);
+                const itemEl = document.getElementById(`item-${index}`);
+                
+                if (costEl) costEl.innerText = cost.toLocaleString();
+                if (countEl) countEl.innerText = item.count;
+                if (itemEl) {
+                    if (gameData.score >= cost) itemEl.classList.remove('disabled'); 
+                    else itemEl.classList.add('disabled');
+                }
+            });
+        }
+
+        // --- その他機能 ---
+        function initShop() {
+            const container = document.getElementById('shop-items');
+            container.innerHTML = '';
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'shop-item';
+                div.id = `item-${index}`;
+                div.onclick = () => buyItem(index);
+                let typeLabel = item.type === 'click' ? `👆 タップ +${item.power}` : `⏱️ 毎秒 +${item.power}`;
+                let typeClass = item.type === 'click' ? "effect-click" : "effect-auto";
+                div.innerHTML = `
+                    <div>
+                        <div class="shop-name">${item.name}</div>
+                        <span class="shop-effect ${typeClass}">${typeLabel} (基礎)</span>
+                        <div class="shop-cost">価格: <span id="cost-${index}">${item.baseCost}</span></div>
+                    </div>
+                    <div class="shop-count" id="count-${index}">${item.count}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- Save/Load System ---
+        function saveGame() {
+            const saveObj = {
+                score: gameData.score, rank: gameData.rank, gachaMultiplier: gameData.gachaMultiplier,
+                totalClicks: gameData.totalClicks, bossKills: gameData.bossKills, 
+                achievements: gameData.achievements, itemCounts: items.map(i => i.count),
+                dungeonFloor: gameData.dungeonFloor, maxFloor: gameData.maxFloor, 
+                artifacts: gameData.artifacts, gachaCount: gameData.gachaCount, diamonds: gameData.diamonds
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
+            const notice = document.getElementById('save-notice');
+            notice.style.opacity = 1; setTimeout(() => notice.style.opacity = 0, 1000);
+        }
+
+        function loadGame() {
+            let savedData = localStorage.getItem(SAVE_KEY);
+            if (!savedData) {
+                for (let key of LEGACY_KEYS) { savedData = localStorage.getItem(key); if (savedData) break; }
+            }
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    gameData.score = parsed.score || 0;
+                    gameData.rank = parsed.rank || 0;
+                    gameData.gachaMultiplier = parsed.gachaMultiplier || 1.0;
+                    if(isNaN(gameData.gachaMultiplier)) gameData.gachaMultiplier = 1.0;
+                    
+                    gameData.totalClicks = parsed.totalClicks || 0;
+                    gameData.bossKills = parsed.bossKills || 0;
+                    gameData.achievements = parsed.achievements || [];
+                    gameData.dungeonFloor = parsed.dungeonFloor || 1;
+                    gameData.maxFloor = parsed.maxFloor || 1;
+                    gameData.artifacts = parsed.artifacts || [];
+                    gameData.gachaCount = parsed.gachaCount || 0;
+                    gameData.diamonds = (parsed.diamonds !== undefined) ? parsed.diamonds : (gameData.rank * 10);
+
+                    if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
+                        parsed.itemCounts.forEach((count, index) => {
+                            if (items[index]) items[index].count = count;
+                        });
+                    }
+                } catch (e) { console.error("Save data corrupted", e); }
             }
         }
 
+        // --- ボス・ガチャ・その他イベント ---
+        function toggleBossBattle() {
+            if (isBossBattle) endBossBattle(false); else startBossBattle();
+        }
+        function startBossBattle() {
+            isBossBattle = true; document.body.classList.add('boss-mode');
+            document.getElementById('battle-btn').innerText = "🏳️ 逃げる";
+            bossMaxHp = 1000000 * Math.pow(1.3, gameData.dungeonFloor - 1);
+            bossCurrentHp = bossMaxHp; bossTimeLeft = getBossTime();
+            document.getElementById('boss-name').innerText = `Floor ${gameData.dungeonFloor}: 野獣の影`;
+            updateBossUI();
+        }
+        function endBossBattle(isVictory) {
+            isBossBattle = false; document.body.classList.remove('boss-mode');
+            document.getElementById('battle-btn').innerText = "⚔️ ダンジョン";
+            if (isVictory) {
+                gameData.bossKills++;
+                if (gameData.dungeonFloor % 5 === 0 && Math.random() < 0.5) {
+                    const uncollected = artifactList.filter(a => !gameData.artifacts.includes(a.id));
+                    if (uncollected.length > 0) {
+                        const newArt = uncollected[Math.floor(Math.random() * uncollected.length)];
+                        gameData.artifacts.push(newArt.id); showPopup("🏺 遺物発見！", newArt.name, true);
+                    }
+                }
+                gameData.dungeonFloor++; if(gameData.dungeonFloor > gameData.maxFloor) gameData.maxFloor = gameData.dungeonFloor;
+                alert(`討伐成功！\n次の階層へ進みます (Floor ${gameData.dungeonFloor})`);
+                saveGame(); checkAchievements();
+            }
+            updateDisplay();
+        }
+        function updateBossUI() {
+            if (!isBossBattle) return;
+            const hpPercent = (bossCurrentHp / bossMaxHp) * 100;
+            document.getElementById('boss-hp-bar').style.width = Math.max(0, hpPercent) + "%";
+            document.getElementById('boss-hp-text').innerText = `${Math.floor(Math.max(0, bossCurrentHp)).toLocaleString()} / ${Math.floor(bossMaxHp).toLocaleString()}`;
+            document.getElementById('boss-timer-display').innerText = `残り ${Math.max(0, bossTimeLeft).toFixed(1)} 秒`;
+        }
+
+        function pullGacha() {
+            if (gameData.diamonds < GACHA_COST_DIAMOND) { alert(`ダイヤ不足 (必要: ${GACHA_COST_DIAMOND} 💎)`); return; }
+            if (!confirm(`${GACHA_COST_DIAMOND}ダイヤでガチャを回しますか？`)) return;
+            gameData.diamonds -= GACHA_COST_DIAMOND; gameData.gachaCount++;
+            playSound(buySoundUrl);
+            const rand = Math.random(); const baseBoost = hasArt("art_gacha") ? 0.05 : 0; 
+            let msg = ""; let boost = 0;
+            if (rand < 0.05) { boost = 0.5; msg = "【超激レア】神の啓示！倍率+50%！"; }
+            else if (rand < 0.20) { boost = 0.2; msg = "【大当たり】王者の風格！倍率+20%！"; }
+            else if (rand < 0.70) { boost = 0.05; msg = "【当たり】いい肥料。倍率+5%"; }
+            else { boost = 0; msg = "【ハズレ】ゴミ。効果なし。"; }
+            gameData.gachaMultiplier += (boost + (boost > 0 ? baseBoost : 0));
+            alert(msg); saveGame(); updateDisplay();
+        }
+
+        function doRebirth() {
+            const cost = getRebirthCost();
+            const rewardDiamonds = (gameData.rank + 1) * 10;
+            if (gameData.score < cost) return;
+            if (confirm(`【転生確認】\n消費: ${cost.toLocaleString()} YJ\n報酬: ${rewardDiamonds} ダイヤ\n\n転生しますか？`)) {
+                gameData.score = 0; items.forEach(i => i.count = 0);
+                gameData.dungeonFloor = 1; gameData.rank++; gameData.diamonds += rewardDiamonds;
+                playSound(buySoundUrl); checkAchievements(); 
+                alert(`転生完了！\n${rewardDiamonds} ダイヤ獲得！`);
+                saveGame(); location.reload();
+            }
+        }
+
+        function checkAchievements() {
+            let unlocked = false;
+            achievementList.forEach(ach => {
+                if (!gameData.achievements.includes(ach.id)) {
+                    if (ach.condition()) {
+                        gameData.achievements.push(ach.id);
+                        showPopup("🏆 実績解除！", ach.name, false); unlocked = true;
+                    }
+                }
+            });
+            if(unlocked) { saveGame(); updateDisplay(); }
+        }
+        function showPopup(title, desc, isRare) {
+            const popup = document.getElementById('notify-popup');
+            document.getElementById('notify-title').innerText = title; document.getElementById('notify-desc').innerText = desc;
+            document.getElementById('notify-icon').innerText = isRare ? "🏺" : "🏆";
+            if(isRare) popup.classList.add('rare'); else popup.classList.remove('rare');
+            playSound(buySoundUrl); popup.classList.add('show'); setTimeout(() => { popup.classList.remove('show'); }, 4000);
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted; const btn = document.getElementById('mute-btn');
+            if (isMuted) { bgm.pause(); bonusBgm.pause(); btn.innerText = "🔇 音OFF"; btn.style.background = "#800"; }
+            else { if (isBonusActive) bonusBgm.play().catch(()=>{}); else if (bgmStarted) bgm.play().catch(()=>{}); btn.innerText = "🔊 音ON"; btn.style.background = "#555"; }
+        }
+        function playSound(url) { if (!isMuted) { let sound = new Audio(url); sound.volume = SE_VOLUME; sound.play().catch(e => {}); } }
         function spawnFloatingText(x, y, text, isSpecial) {
-            const el = document.createElement('div'); el.className = 'floating-number'; 
-            el.innerText = text;
+            const el = document.createElement('div'); el.className = 'floating-number'; el.innerText = text;
             if (isSpecial) el.classList.add('crit-hit');
             const offsetX = (Math.random() - 0.5) * 40; el.style.left = (x + offsetX) + 'px'; el.style.top = y + 'px';
             document.body.appendChild(el); setTimeout(() => el.remove(), 800);
@@ -645,11 +679,9 @@
             for (let i = 0; i < count; i++) {
                 const img = document.createElement('img'); img.src = '野獣.png'; img.className = 'pop-particle';
                 img.style.left = x + 'px'; img.style.top = y + 'px';
-                const angle = Math.random() * Math.PI * 2; const distance = 100 + Math.random() * 150;
-                const destX = x + Math.cos(angle) * distance; const destY = y + Math.sin(angle) * distance - 100;
                 const rotate = Math.random() * 720 - 360;
                 document.body.appendChild(img);
-                setTimeout(() => { img.style.transform = `translate(${destX - x}px, ${destY - y}px) rotate(${rotate}deg) scale(0)`; img.style.opacity = 0; }, 10);
+                setTimeout(() => { img.style.transform = `translate(${Math.cos(Math.random()*6)*100}px, ${Math.sin(Math.random()*6)*100-100}px) rotate(${rotate}deg) scale(0)`; img.style.opacity = 0; }, 10);
                 setTimeout(() => img.remove(), 800);
             }
         }
@@ -676,139 +708,71 @@
         }
         setInterval(() => { if (Math.random() < 0.1) spawnCar(); }, 5000);
 
-        function toggleMute() {
-            isMuted = !isMuted; const btn = document.getElementById('mute-btn');
-            if (isMuted) { bgm.pause(); bonusBgm.pause(); btn.innerText = "🔇 音OFF"; btn.style.background = "#800"; }
-            else { if (isBonusActive) bonusBgm.play().catch(()=>{}); else if (bgmStarted) bgm.play().catch(()=>{}); btn.innerText = "🔊 音ON"; btn.style.background = "#555"; }
+        function closeModal() { document.getElementById('common-modal').classList.remove('open'); }
+        function showAchievements() {
+            const body = document.getElementById('modal-body');
+            document.getElementById('modal-title').innerText = "🏆 実績リスト (x" + getAchievementMultiplier().toFixed(2) + ")";
+            body.innerHTML = "";
+            achievementList.forEach(ach => {
+                const isUnlocked = gameData.achievements.includes(ach.id);
+                body.innerHTML += `<div class="list-item ${isUnlocked ? '' : 'locked'}"><div class="list-icon">🏆</div><div class="list-info"><div class="list-title">${ach.name}</div><div class="list-desc">${ach.desc}</div></div></div>`;
+            });
+            document.getElementById('common-modal').classList.add('open');
         }
-        function playSound(url) { if (!isMuted) { let sound = new Audio(url); sound.volume = SE_VOLUME; sound.play().catch(e => {}); } }
-
-        function saveGame() {
-            const saveObj = {
-                score: gameData.score, 
-                // clickPower/autoIncomeは保存しない（recalcBaseStatsで復元）
-                rank: gameData.rank, gachaMultiplier: gameData.gachaMultiplier, totalClicks: gameData.totalClicks,
-                bossKills: gameData.bossKills, achievements: gameData.achievements, 
-                itemCounts: items.map(item => item.count), // これが重要
-                dungeonFloor: gameData.dungeonFloor, maxFloor: gameData.maxFloor, artifacts: gameData.artifacts,
-                gachaCount: gameData.gachaCount, diamonds: gameData.diamonds
-            };
-            localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj));
-            const notice = document.getElementById('save-notice');
-            notice.style.opacity = 1; setTimeout(() => notice.style.opacity = 0, 1000);
+        function showArtifacts() {
+            const body = document.getElementById('modal-body');
+            document.getElementById('modal-title').innerText = "🏺 アーティファクト";
+            body.innerHTML = "";
+            if (gameData.artifacts.length === 0) body.innerHTML = "<div style='padding:20px; text-align:center;'>まだ何も持っていません。<br>ダンジョンの深層(5階ごと)で手に入るようです...</div>";
+            artifactList.forEach(art => {
+                const has = hasArt(art.id);
+                body.innerHTML += `<div class="list-item ${has ? '' : 'locked'}"><div class="list-icon">🏺</div><div class="list-info"><div class="list-title">${art.name}</div><div class="list-desc">${art.desc}</div></div><div>${has ? '✅' : '❓'}</div></div>`;
+            });
+            document.getElementById('common-modal').classList.add('open');
         }
-        function loadGame() {
-            let savedData = localStorage.getItem(SAVE_KEY);
-            if (!savedData) { for (let key of LEGACY_KEYS) { savedData = localStorage.getItem(key); if (savedData) break; } }
-            if (savedData) {
-                try {
-                    const parsed = JSON.parse(savedData);
-                    gameData.score = parsed.score || 0;
-                    // Powerは読み込まない（アイテム数から再計算）
-                    
-                    gameData.rank = parsed.rank || 0;
-                    gameData.gachaMultiplier = parsed.gachaMultiplier || 1.0;
-                    gameData.totalClicks = parsed.totalClicks || 0;
-                    gameData.bossKills = parsed.bossKills || 0;
-                    gameData.achievements = parsed.achievements || [];
-                    gameData.dungeonFloor = parsed.dungeonFloor || 1;
-                    gameData.maxFloor = parsed.maxFloor || 1;
-                    gameData.artifacts = parsed.artifacts || [];
-                    gameData.gachaCount = parsed.gachaCount || 0;
-                    if (parsed.diamonds !== undefined) {
-                        gameData.diamonds = parsed.diamonds;
-                    } else {
-                        gameData.diamonds = gameData.rank * 10;
-                    }
-                    if (parsed.itemCounts && Array.isArray(parsed.itemCounts)) {
-                        parsed.itemCounts.forEach((count, index) => { if (items[index]) items[index].count = count; });
-                    }
-                } catch (e) { console.error("Save data corrupted", e); }
-            }
+        function showStats() {
+            const body = document.getElementById('modal-body');
+            document.getElementById('modal-title').innerText = "📊 詳細ステータス";
+            const stats = calculateBaseStats();
+            body.innerHTML = `
+                <div class="stat-row"><span class="stat-label">野獣ランク (転生 ${gameData.rank}回):</span> <span class="stat-val">x${getRankMultiplier().toFixed(2)}</span></div>
+                <div class="stat-row"><span class="stat-label">ガチャ倍率 (${gameData.gachaCount}回):</span> <span class="stat-val">x${gameData.gachaMultiplier.toFixed(2)}</span></div>
+                <div class="stat-row"><span class="stat-label">実績倍率 (${gameData.achievements.length}個):</span> <span class="stat-val">x${getAchievementMultiplier().toFixed(2)}</span></div>
+                <div class="stat-row"><span class="stat-label">魂倍率 (${gameData.bossKills}体):</span> <span class="stat-val">x${getSoulMultiplier().toFixed(2)}</span></div>
+                <div class="stat-row"><span class="stat-label">遺物倍率:</span> <span class="stat-val">x${getArtifactPassiveMultiplier().toFixed(2)}</span></div>
+                <div class="stat-row"><span class="stat-label" style="color:#ffcc00">合計倍率:</span> <span class="stat-val" style="color:#ffcc00">x${getGlobalMultiplier().toFixed(2)}</span></div>
+                <br>
+                <div class="stat-row"><span class="stat-label">所持ダイヤ:</span> <span class="stat-val" style="color:#00ffff">${gameData.diamonds} 💎</span></div>
+                <div class="stat-row"><span class="stat-label">基礎クリック力:</span> <span class="stat-val">${Math.floor(stats.clickPower).toLocaleString()}</span></div>
+                <div class="stat-row"><span class="stat-label">基礎秒間収入:</span> <span class="stat-val">${Math.floor(stats.autoIncome).toLocaleString()}</span></div>
+            `;
+            document.getElementById('common-modal').classList.add('open');
         }
         function resetGame() {
-            if(confirm("データを完全に削除して、最初からやり直しますか？")) {
-                localStorage.removeItem(SAVE_KEY);
-                LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
-                location.reload();
+            if(confirm("全データを削除しますか？復旧できません。")) {
+                localStorage.removeItem(SAVE_KEY); LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); location.reload();
             }
-        }
-
-        // --- 初期化・ループ ---
-        function initShop() {
-            const container = document.getElementById('shop-items'); container.innerHTML = '';
-            items.forEach((item, index) => {
-                const div = document.createElement('div'); div.className = 'shop-item'; div.id = `item-${index}`; div.onclick = () => buyItem(index);
-                let typeLabel = item.type === 'click' ? `👆 タップ +${item.power}` : `⏱️ 毎秒 +${item.power}`;
-                let typeClass = item.type === 'click' ? "effect-click" : "effect-auto";
-                div.innerHTML = `<div><div class="shop-name">${item.name}</div><span class="shop-effect ${typeClass}">${typeLabel} (基礎)</span><div class="shop-cost">価格: <span id="cost-${index}">${item.baseCost}</span></div></div><div class="shop-count" id="count-${index}">0</div>`;
-                container.appendChild(div);
-            });
-        }
-        function updateDisplay() {
-            // ★修正: ボス戦中でも表示更新を行う（リターンしない）
-            
-            document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
-            
-            // 再計算して表示
-            const stats = recalcBaseStats();
-            const mult = getGlobalMultiplier();
-            let finalAuto = stats.autoIncome * mult; 
-            if (isBonusActive) finalAuto *= 5;
-            
-            let spsEl = document.getElementById('sps'); 
-            spsEl.innerText = Math.floor(finalAuto).toLocaleString(); 
-            spsEl.style.color = isBonusActive ? '#ff0000' : '#fff';
-            
-            document.getElementById('next-bonus-time').innerText = nextBonusTimer.toFixed(1);
-            document.getElementById('floor-display').innerText = gameData.dungeonFloor;
-            document.getElementById('max-floor-display').innerText = gameData.maxFloor;
-            document.getElementById('total-mult-display').innerText = mult.toFixed(2);
-            document.getElementById('diamond-display').innerText = gameData.diamonds.toLocaleString();
-            
-            document.getElementById('gacha-btn').innerText = `📦 ガチャ (${GACHA_COST_DIAMOND}💎)`;
-
-            const rbBtn = document.getElementById('rebirth-btn'); const rbCost = getRebirthCost();
-            if (gameData.score >= rbCost) { rbBtn.classList.remove('locked'); rbBtn.innerText = "🔄 転生可能！"; } 
-            else { 
-                rbBtn.classList.add('locked'); 
-                let costText = rbCost.toLocaleString(); 
-                if(rbCost >= 100000000) costText = (rbCost/100000000).toFixed(0)+"億"; 
-                rbBtn.innerText = `転生: ${costText}YJ必要`; 
-            }
-            
-            items.forEach((item, index) => {
-                const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
-                document.getElementById(`cost-${index}`).innerText = cost.toLocaleString();
-                document.getElementById(`count-${index}`).innerText = item.count;
-                const el = document.getElementById(`item-${index}`);
-                if (gameData.score >= cost) el.classList.remove('disabled'); else el.classList.add('disabled');
-            });
         }
 
         setInterval(() => {
-            // 再計算
-            const stats = recalcBaseStats();
-            
             if (isBossBattle) {
                 bossTimeLeft -= 0.1;
+                const stats = calculateBaseStats();
                 let dps = stats.autoIncome * getGlobalMultiplier();
-                if (hasArt("art_boss_dmg")) dps *= 1.3; 
-                if (isBonusActive) dps *= 5;
+                if (hasArt("art_boss_dmg")) dps *= 1.3; if (isBonusActive) dps *= 5;
                 bossCurrentHp -= dps / 10;
                 updateBossUI();
                 if (bossCurrentHp <= 0) endBossBattle(true);
                 if (bossTimeLeft <= 0) endBossBattle(false);
             } else {
                 if (isBonusActive) {
-                    bonusTimer -= 0.1;
-                    document.getElementById('bonus-timer').innerText = `残り ${Math.max(0, bonusTimer).toFixed(1)} 秒`;
+                    bonusTimer -= 0.1; document.getElementById('bonus-timer').innerText = `残り ${Math.max(0, bonusTimer).toFixed(1)} 秒`;
                     if (bonusTimer <= 0) { isBonusActive=false; nextBonusTimer=BONUS_INTERVAL; document.body.classList.remove('bonus-mode'); document.getElementById('bonus-banner').style.display='none'; if(!isMuted) { bonusBgm.pause(); bgm.play().catch(()=>{}); } updateDisplay(); }
                 } else {
-                    nextBonusTimer -= 0.1;
-                    document.getElementById('next-bonus-time').innerText = Math.max(0, nextBonusTimer).toFixed(1);
+                    nextBonusTimer -= 0.1; document.getElementById('next-bonus-time').innerText = Math.max(0, nextBonusTimer).toFixed(1);
                     if (nextBonusTimer <= 0) { isBonusActive=true; bonusTimer=getFeverTime(); document.body.classList.add('bonus-mode'); document.getElementById('bonus-banner').style.display='block'; if(!isMuted) { bgm.pause(); bonusBgm.currentTime=0; bonusBgm.play().catch(()=>{}); } updateDisplay(); }
                 }
+                const stats = calculateBaseStats();
                 if (stats.autoIncome > 0) {
                     let income = stats.autoIncome * getGlobalMultiplier();
                     if (isBonusActive) income *= 5;
