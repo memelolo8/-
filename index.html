@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：実績リスト実装版</title>
+    <title>野獣クリッカー：バランス調整版</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -242,7 +242,7 @@
             <button class="btn btn-gacha" onclick="pullGacha()">📦 ガチャ (10万YJ)</button>
         </div>
         <div class="btn-row">
-            <button class="btn btn-rebirth locked" id="rebirth-btn" onclick="doRebirth()">🔄 転生 (100万YJ~)</button>
+            <button class="btn btn-rebirth locked" id="rebirth-btn" onclick="doRebirth()">🔄 転生</button>
         </div>
     </div>
 
@@ -275,7 +275,7 @@
     </div>
 
     <script>
-        // ゲームデータ構造 v4 (実績、クリック総数追加)
+        // ゲームデータ構造 v5 (バージョン更新、構造はv4と同じ)
         let gameData = { 
             score: 0, 
             clickPower: 1, 
@@ -283,7 +283,7 @@
             rank: 0, 
             gachaMultiplier: 1.0,
             totalClicks: 0,
-            achievements: [] // 解除済みIDの配列
+            achievements: [] 
         };
         
         let isMuted = false;
@@ -294,11 +294,12 @@
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
         
-        const SAVE_KEY = 'yaju_clicker_save_v4'; 
-        const LEGACY_KEYS = ['yaju_clicker_save_v3', 'yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
+        const SAVE_KEY = 'yaju_clicker_save_v5'; 
+        const LEGACY_KEYS = ['yaju_clicker_save_v4', 'yaju_clicker_save_v3', 'yaju_clicker_save_v2', 'yaju_clicker_save_v1'];
 
         const GACHA_COST = 100000;
-        const REBIRTH_COST = 1000000;
+        // 転生コストの基礎値
+        const REBIRTH_BASE_COST = 1000000;
 
         const bgm = document.getElementById('bgm');
         const bonusBgm = document.getElementById('bonus-bgm');
@@ -345,6 +346,15 @@
 
         function getGlobalMultiplier() { 
             return (1 + gameData.rank * 0.5) * gameData.gachaMultiplier * getAchievementMultiplier(); 
+        }
+        
+        // --- 転生コスト計算 ---
+        function getRebirthCost() {
+            // 基礎100万 * 10の(ランク)乗
+            // ランク0: 100万
+            // ランク1: 1000万
+            // ランク2: 1億 ...
+            return REBIRTH_BASE_COST * Math.pow(10, gameData.rank);
         }
 
         function checkAchievements() {
@@ -502,13 +512,15 @@
         }
 
         function doRebirth() {
-            if (gameData.score < REBIRTH_COST) return;
-            if (confirm(`【転生確認】\nお金とアイテムを全てリセットして「転生」しますか？\n\n・野獣ランクが 1 上がります\n・全ての収入がさらに 1.5倍 になります`)) {
+            const cost = getRebirthCost();
+            if (gameData.score < cost) return;
+            
+            if (confirm(`【転生確認】\n必要コスト: ${cost.toLocaleString()} YJ\nお金とアイテムを全てリセットして「転生」しますか？\n\n・野獣ランクが 1 上がります\n・全ての収入がさらに 1.5倍 になります`)) {
                 gameData.score = 0; gameData.clickPower = 1; gameData.autoIncome = 0; items.forEach(i => i.count = 0);
                 gameData.rank++;
                 playSound(buySoundUrl);
                 checkAchievements(); 
-                alert(`転生完了！\n野獣ランクが ${gameData.rank} になりました！`);
+                alert(`転生完了！\n野獣ランクが ${gameData.rank} になりました！\n次の転生コストは ${getRebirthCost().toLocaleString()} YJ です。`);
                 saveGame();
                 location.reload();
             }
@@ -550,8 +562,21 @@
             document.getElementById('ach-mult-display').innerText = getAchievementMultiplier().toFixed(1);
 
             const rbBtn = document.getElementById('rebirth-btn');
-            if (gameData.score >= REBIRTH_COST) { rbBtn.classList.remove('locked'); rbBtn.innerText = "🔄 転生可能！"; } 
-            else { rbBtn.classList.add('locked'); rbBtn.innerText = `転生まであと ${(REBIRTH_COST - gameData.score).toLocaleString()} YJ`; }
+            const rbCost = getRebirthCost();
+            if (gameData.score >= rbCost) { 
+                rbBtn.classList.remove('locked'); 
+                rbBtn.innerText = "🔄 転生可能！"; 
+            } else { 
+                rbBtn.classList.add('locked'); 
+                // コストを短縮表示 (例: 1000万YJ)
+                let costText = rbCost.toLocaleString();
+                if(rbCost >= 1000000000000) costText = (rbCost/1000000000000).toFixed(0) + "兆";
+                else if(rbCost >= 100000000) costText = (rbCost/100000000).toFixed(0) + "億";
+                else if(rbCost >= 10000) costText = (rbCost/10000).toFixed(0) + "万";
+                
+                rbBtn.innerText = `転生: ${costText}YJ必要`; 
+            }
+            
             items.forEach((item, index) => {
                 const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count));
                 document.getElementById(`cost-${index}`).innerText = cost.toLocaleString();
