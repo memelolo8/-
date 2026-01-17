@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野獣クリッカー：完全修正版 (v13)</title>
+    <title>野獣クリッカー：完全修正版 (v15)</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -31,6 +31,12 @@
             100% { filter: brightness(1); }
         }
         .damaged { animation: damage-flash 0.1s; }
+
+        @keyframes buy-flash {
+            0% { background-color: #fff; transform: scale(1.05); }
+            100% { background-color: rgba(68, 68, 68, 0.8); transform: scale(1); }
+        }
+        .bought { animation: buy-flash 0.3s ease-out; }
 
         body.bonus-mode { animation: rainbow-bg 0.5s infinite alternate; }
         @keyframes rainbow-bg {
@@ -110,15 +116,17 @@
         .shop-item {
             display: flex; justify-content: space-between; align-items: center;
             background: rgba(68, 68, 68, 0.8); margin-bottom: 8px; padding: 10px;
-            border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid #555;
+            border-radius: 8px; cursor: pointer; transition: all 0.1s; border: 1px solid #555;
         }
         .shop-item:hover { background: rgba(80, 80, 80, 0.9); transform: scale(1.02); }
-        .shop-item.disabled { opacity: 0.5; pointer-events: none; background: #222; }
+        /* 買えない時は暗く */
+        .shop-item.disabled { opacity: 0.4; pointer-events: none; background: #222; border-color: #333; }
+        
         .shop-name { font-weight: bold; color: #fff; font-size: 1.0em; margin-bottom: 3px; }
         .shop-effect { font-size: 0.8em; margin-bottom: 3px; display: block; }
         .effect-click { color: #ffaa00; font-weight: bold; } .effect-auto { color: #00aaff; font-weight: bold; }  
         .shop-cost { color: #ffcc00; font-weight: bold; font-size: 0.9em; }
-        .shop-count { font-size: 1.5em; font-weight: bold; color: #ddd; }
+        .shop-count { font-size: 1.5em; font-weight: bold; color: #ddd; min-width: 30px; text-align: right; }
 
         /* ステータス & コントロール */
         .status-panel {
@@ -288,10 +296,10 @@
     </div>
 
     <script>
-        // ゲームデータ v13
+        // ゲームデータ v15
         let gameData = { 
-            score: 0, rank: 0, gachaMultiplier: 1.0, 
-            totalClicks: 0, bossKills: 0, 
+            score: 0, clickPower: 1, autoIncome: 0, rank: 0, 
+            gachaMultiplier: 1.0, totalClicks: 0, bossKills: 0, 
             achievements: [], itemCounts: [],
             dungeonFloor: 1, maxFloor: 1,
             artifacts: [], gachaCount: 0,
@@ -305,8 +313,8 @@
         const SE_VOLUME = 0.3;
         const BONUS_INTERVAL = 60;
         const BONUS_DURATION = 10;
-        const SAVE_KEY = 'yaju_clicker_save_v13'; 
-        const LEGACY_KEYS = ['yaju_clicker_save_v12', 'yaju_clicker_save_v11', 'yaju_clicker_save_v10', 'yaju_clicker_save_v9'];
+        const SAVE_KEY = 'yaju_clicker_save_v15'; 
+        const LEGACY_KEYS = ['yaju_clicker_save_v14', 'yaju_clicker_save_v13', 'yaju_clicker_save_v12', 'yaju_clicker_save_v11', 'yaju_clicker_save_v10'];
 
         const GACHA_COST_DIAMOND = 10; 
         const REBIRTH_BASE_COST = 1000000;
@@ -373,7 +381,7 @@
             { id: "buy_last", name: "完走した感想", desc: "最後のアイテムを買う", condition: () => items[items.length-1].count >= 1 }
         ];
 
-        // --- 計算関数 (毎回計算することでバグを防ぐ) ---
+        // --- 計算関数 ---
         function hasArt(id) { return gameData.artifacts.includes(id); }
         function getDiscountMultiplier() { return hasArt("art_discount") ? 0.9 : 1.0; }
         function getCritRate() { return hasArt("art_crit_rate") ? 0.1 : 0.05; }
@@ -394,9 +402,8 @@
         }
         
         function getRebirthCost() { return REBIRTH_BASE_COST * Math.pow(10, gameData.rank); }
-        function getGachaCost() { return Math.floor(GACHA_COST_DIAMOND); } // 固定10ダイヤ
+        function getGachaCost() { return Math.floor(GACHA_COST_DIAMOND); } 
 
-        // 基礎ステータスをアイテム所持数から算出
         function calculateBaseStats() {
             let cp = 1;
             let ai = 0;
@@ -414,8 +421,16 @@
             const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
             if (gameData.score >= cost) {
                 gameData.score -= cost;
-                item.count++; // オブジェクトを直接更新
+                item.count++; 
                 playSound(buySoundUrl);
+                
+                // 買った演出
+                const row = document.getElementById(`item-${index}`);
+                if(row) {
+                    row.classList.add('bought');
+                    setTimeout(()=>row.classList.remove('bought'), 300);
+                }
+
                 checkAchievements();
                 updateDisplay(); 
                 saveGame();
@@ -456,14 +471,12 @@
             updateDisplay();
         }
 
-        // --- UI更新 (最重要) ---
+        // --- UI更新 ---
         function updateDisplay() {
-            // スコア更新
             document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
             
             const stats = calculateBaseStats();
             const mult = getGlobalMultiplier();
-            
             let finalAuto = stats.autoIncome * mult;
             if (isBonusActive) finalAuto *= 5;
             
@@ -475,10 +488,8 @@
             document.getElementById('max-floor-display').innerText = gameData.maxFloor;
             document.getElementById('total-mult-display').innerText = mult.toFixed(2);
             document.getElementById('diamond-display').innerText = gameData.diamonds.toLocaleString();
-            
             document.getElementById('gacha-btn').innerText = `📦 ガチャ (${GACHA_COST_DIAMOND}💎)`;
 
-            // 転生ボタン
             const rbBtn = document.getElementById('rebirth-btn');
             const rbCost = getRebirthCost();
             if (gameData.score >= rbCost) { 
@@ -490,17 +501,15 @@
                 rbBtn.innerText = `転生: ${costText}YJ必要`; 
             }
             
-            // ショップリスト更新
             items.forEach((item, index) => {
                 const cost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
-                
-                // 要素が存在するか確認してから更新
                 const costEl = document.getElementById(`cost-${index}`);
                 const countEl = document.getElementById(`count-${index}`);
                 const itemEl = document.getElementById(`item-${index}`);
                 
                 if (costEl) costEl.innerText = cost.toLocaleString();
-                if (countEl) countEl.innerText = item.count;
+                if (countEl) countEl.innerText = item.count.toLocaleString(); // カンマ区切り
+                
                 if (itemEl) {
                     if (gameData.score >= cost) itemEl.classList.remove('disabled'); 
                     else itemEl.classList.add('disabled');
@@ -508,7 +517,7 @@
             });
         }
 
-        // --- その他機能 ---
+        // --- 初期化・その他 ---
         function initShop() {
             const container = document.getElementById('shop-items');
             container.innerHTML = '';
@@ -517,15 +526,17 @@
                 div.className = 'shop-item';
                 div.id = `item-${index}`;
                 div.onclick = () => buyItem(index);
-                let typeLabel = item.type === 'click' ? `👆 タップ +${item.power}` : `⏱️ 毎秒 +${item.power}`;
+                let typeLabel = item.type === 'click' ? `👆 タップ +${item.power.toLocaleString()}` : `⏱️ 毎秒 +${item.power.toLocaleString()}`;
                 let typeClass = item.type === 'click' ? "effect-click" : "effect-auto";
+                // 初期表示からカンマ区切りを適用
+                const initialCost = Math.floor(item.baseCost * Math.pow(1.15, item.count) * getDiscountMultiplier());
                 div.innerHTML = `
                     <div>
                         <div class="shop-name">${item.name}</div>
                         <span class="shop-effect ${typeClass}">${typeLabel} (基礎)</span>
-                        <div class="shop-cost">価格: <span id="cost-${index}">${item.baseCost}</span></div>
+                        <div class="shop-cost">価格: <span id="cost-${index}">${initialCost.toLocaleString()}</span></div>
                     </div>
-                    <div class="shop-count" id="count-${index}">${item.count}</div>
+                    <div class="shop-count" id="count-${index}">${item.count.toLocaleString()}</div>
                 `;
                 container.appendChild(div);
             });
@@ -556,8 +567,6 @@
                     gameData.score = parsed.score || 0;
                     gameData.rank = parsed.rank || 0;
                     gameData.gachaMultiplier = parsed.gachaMultiplier || 1.0;
-                    if(isNaN(gameData.gachaMultiplier)) gameData.gachaMultiplier = 1.0;
-                    
                     gameData.totalClicks = parsed.totalClicks || 0;
                     gameData.bossKills = parsed.bossKills || 0;
                     gameData.achievements = parsed.achievements || [];
@@ -575,6 +584,11 @@
                 } catch (e) { console.error("Save data corrupted", e); }
             }
         }
+        function resetGame() {
+            if(confirm("全データを削除しますか？復旧できません。")) {
+                localStorage.removeItem(SAVE_KEY); LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); location.reload();
+            }
+        }
 
         // --- ボス・ガチャ・その他イベント ---
         function toggleBossBattle() {
@@ -587,12 +601,16 @@
             bossCurrentHp = bossMaxHp; bossTimeLeft = getBossTime();
             document.getElementById('boss-name').innerText = `Floor ${gameData.dungeonFloor}: 野獣の影`;
             updateBossUI();
+            updateDisplay();
         }
         function endBossBattle(isVictory) {
             isBossBattle = false; document.body.classList.remove('boss-mode');
             document.getElementById('battle-btn').innerText = "⚔️ ダンジョン";
             if (isVictory) {
                 gameData.bossKills++;
+                const reward = Math.floor(bossMaxHp * 0.1) + (gameData.dungeonFloor * 1000);
+                gameData.score += reward;
+
                 if (gameData.dungeonFloor % 5 === 0 && Math.random() < 0.5) {
                     const uncollected = artifactList.filter(a => !gameData.artifacts.includes(a.id));
                     if (uncollected.length > 0) {
@@ -601,7 +619,7 @@
                     }
                 }
                 gameData.dungeonFloor++; if(gameData.dungeonFloor > gameData.maxFloor) gameData.maxFloor = gameData.dungeonFloor;
-                alert(`討伐成功！\n次の階層へ進みます (Floor ${gameData.dungeonFloor})`);
+                alert(`討伐成功！\n報酬: ${reward.toLocaleString()} YJ\n次の階層へ進みます`);
                 saveGame(); checkAchievements();
             }
             updateDisplay();
@@ -742,16 +760,11 @@
                 <div class="stat-row"><span class="stat-label">遺物倍率:</span> <span class="stat-val">x${getArtifactPassiveMultiplier().toFixed(2)}</span></div>
                 <div class="stat-row"><span class="stat-label" style="color:#ffcc00">合計倍率:</span> <span class="stat-val" style="color:#ffcc00">x${getGlobalMultiplier().toFixed(2)}</span></div>
                 <br>
-                <div class="stat-row"><span class="stat-label">所持ダイヤ:</span> <span class="stat-val" style="color:#00ffff">${gameData.diamonds} 💎</span></div>
+                <div class="stat-row"><span class="stat-label">所持ダイヤ:</span> <span class="stat-val" style="color:#00ffff">${gameData.diamonds.toLocaleString()} 💎</span></div>
                 <div class="stat-row"><span class="stat-label">基礎クリック力:</span> <span class="stat-val">${Math.floor(stats.clickPower).toLocaleString()}</span></div>
                 <div class="stat-row"><span class="stat-label">基礎秒間収入:</span> <span class="stat-val">${Math.floor(stats.autoIncome).toLocaleString()}</span></div>
             `;
             document.getElementById('common-modal').classList.add('open');
-        }
-        function resetGame() {
-            if(confirm("全データを削除しますか？復旧できません。")) {
-                localStorage.removeItem(SAVE_KEY); LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); location.reload();
-            }
         }
 
         setInterval(() => {
